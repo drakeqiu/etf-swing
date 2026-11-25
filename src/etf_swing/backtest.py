@@ -21,7 +21,7 @@ DEFAULT_SPREAD = 0.0005
 
 
 def commission(size: float, price: float) -> float:
-    """Return one-side commission, enforcing the per-fill minimum."""
+    """返回单边佣金，并执行单笔最低收费。"""
     return max(abs(size) * price * COMMISSION_RATE, MIN_COMMISSION)
 
 
@@ -35,6 +35,7 @@ def sma(values: object, period: int) -> object:
 
 class SmaCross(Strategy):
     """快线高于慢线时持有多头，否则保持空仓。"""
+    spread = DEFAULT_SPREAD
 
     def init(self) -> None:
         self.fast = self.I(sma, self.data.Close, FAST_SMA_PERIOD)
@@ -43,9 +44,11 @@ class SmaCross(Strategy):
     def next(self) -> None:
         if self.fast[-1] > self.slow[-1]:
             if not self.position:
-                price_with_costs = self.data.Close[-1] * (1 + DEFAULT_SPREAD)
+                price_with_costs = self.data.Close[-1] * (1 + self.spread)
                 affordable = self.equity / (price_with_costs * (1 + COMMISSION_RATE))
                 size = int(affordable / LOT_SIZE) * LOT_SIZE
+                while size and size * price_with_costs + commission(size, price_with_costs) > self.equity:
+                    size -= LOT_SIZE
                 if size:
                     self.buy(size=size)
         elif self.position:
@@ -53,7 +56,7 @@ class SmaCross(Strategy):
 
 
 def run_backtest(data: pd.DataFrame, spread: float = DEFAULT_SPREAD):
-    """Run the long/flat strategy with project execution assumptions."""
+    """按项目执行假设运行长仓/空仓示例策略。"""
     backtest = Backtest(
         data,
         SmaCross,
@@ -62,4 +65,4 @@ def run_backtest(data: pd.DataFrame, spread: float = DEFAULT_SPREAD):
         spread=spread,
         exclusive_orders=True,
     )
-    return backtest.run()
+    return backtest.run(spread=spread)

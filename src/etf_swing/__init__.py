@@ -95,7 +95,16 @@ def main(args: list[str] | None = None, provider: object | None = None) -> None:
     if provider is not None:
         run_cli(parsed, provider)
         return
+    if not parsed.refresh:
+        class CacheOnlyProvider:
+            def fetch_bars(self, *args):
+                raise AssertionError("cache-only access must not fetch bars")
 
+            def fetch_factors(self, *args):
+                raise AssertionError("cache-only access must not fetch factors")
+
+        run_cli(parsed, CacheOnlyProvider())
+        return
     from AmazingData import BaseData, MarketData, login, logout
     from AmazingData.query_api.market_data import Period
 

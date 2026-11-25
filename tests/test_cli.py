@@ -3,28 +3,15 @@ from __future__ import annotations
 import json
 from datetime import date
 
-import numpy as np
 import pandas as pd
 
-from etf_swing import main
+from etf_swing import _parser, main
+from synthetic_data import synthetic_data
 
 
 class SyntheticProvider:
     def __init__(self) -> None:
-        close = np.array(
-            [100.0] * 75 + list(np.linspace(101, 180, 45)) + [180.0] * 20
-            + list(np.linspace(179, 70, 65))
-        )
-        self.bars = pd.DataFrame(
-            {
-                "Open": close,
-                "High": close + 1,
-                "Low": close - 1,
-                "Close": close,
-                "Volume": 1_000_000,
-            },
-            index=pd.date_range("2025-01-01", periods=len(close), freq="B"),
-        )
+        self.bars = synthetic_data()
 
     def fetch_bars(self, symbol: str, start: date, end: date) -> pd.DataFrame:
         return self.bars
@@ -52,3 +39,34 @@ def test_cli_exports_consistent_offline_run(tmp_path) -> None:
     assert len(trades) == saved["metrics"]["trade_count"]
     assert not equity.empty
     assert saved["cost_assumptions"]["spread"] == 0
+
+
+def test_cli_default_spread_and_cache_metadata(tmp_path) -> None:
+    assert _parser().get_default("spread") == 0.0005
+    main(args=[
+        "--start", "2025-01-01", "--end", "2025-09-30", "--refresh",
+        "--cache-dir", str(tmp_path / "cache"), "--output-dir", str(tmp_path / "results"),
+    ], provider=SyntheticProvider())
+    result = json.loads((tmp_path / "results/result.json").read_text())
+    assert result["cost_assumptions"]["spread"] == 0.0005
+    assert result["data_coverage_start"] == "2025-01-01"
+    assert result["data_coverage_end"] == "2025-09-30"
+    assert result["adjustment_reference_date"] == "2025-09-30"
+    assert result["cache_status"] == "refreshed"
+
+
+def test_cli_exports_null_profit_factor_when_no_trade_loses(tmp_path) -> None:
+    class RisingProvider(SyntheticProvider):
+        def __init__(self):
+            close = list(range(100, 400))
+            self.bars = pd.DataFrame(
+                {"Open": close, "High": close, "Low": close, "Close": close, "Volume": 1000},
+                index=pd.bdate_range("2024-01-01", periods=len(close)),
+            )
+
+    main(args=[
+        "--start", "2024-01-01", "--end", "2025-02-28", "--refresh",
+        "--cache-dir", str(tmp_path / "cache"), "--output-dir", str(tmp_path / "results"),
+    ], provider=RisingProvider())
+    result = json.loads((tmp_path / "results/result.json").read_text())
+    assert result["metrics"]["profit_factor"] is None

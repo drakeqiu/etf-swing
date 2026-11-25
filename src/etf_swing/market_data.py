@@ -11,11 +11,10 @@ import pandas as pd
 
 BAR_COLUMNS = ["Open", "High", "Low", "Close", "Volume"]
 
-
 class MarketDataProvider(Protocol):
     def fetch_bars(self, sdk_code: str, start: date, end: date) -> pd.DataFrame: ...
-
     def fetch_factors(self, sdk_code: str, start: date, end: date) -> pd.DataFrame: ...
+    def trading_sessions(self, start: date, end: date) -> pd.DatetimeIndex: ...
 
 
 def _code_tokens(value: object) -> set[str]:
@@ -24,7 +23,7 @@ def _code_tokens(value: object) -> set[str]:
 
 
 def resolve_etf_code(symbol: str, code_table: object) -> str:
-    """Resolve a bare ETF code against the SDK's EXTRA_ETF table."""
+    """依据 AmazingData 的 EXTRA_ETF 代码表解析 ETF 代码。"""
     parts = str(symbol).replace("_", ".").replace("-", ".").split(".")
     target = next((part for part in reversed(parts) if part.isdigit()), symbol)
 
@@ -53,7 +52,7 @@ def _sdk_frame(
     required: list[str],
     aliases: dict[str, str],
 ) -> pd.DataFrame:
-    """Normalize an AmazingData result while rejecting unknown field layouts."""
+    """规范化 AmazingData 查询结果；字段布局不明时明确失败。"""
     if isinstance(result, dict):
         for key in (sdk_code, sdk_code.split(".")[-1]):
             if key in result:
@@ -67,8 +66,10 @@ def _sdk_frame(
     for column in ("code", "symbol", "security_code", "ticker"):
         if column in frame.columns:
             normalized = sdk_code.upper().replace("_", ".").replace("-", ".")
+            ticker = normalized.split(".")[-1]
             frame = frame.loc[frame[column].astype(str).map(
-                lambda value: value.upper().replace("_", ".").replace("-", ".") == normalized
+                lambda value: value.upper().replace("_", ".").replace("-", ".")
+                in (normalized, ticker)
             )]
             break
     renames = {
@@ -112,7 +113,7 @@ def _dated_frame(frame: pd.DataFrame, required: list[str]) -> pd.DataFrame:
 
 
 def adjust_ohlc(bars: pd.DataFrame, factors: pd.Series) -> pd.DataFrame:
-    """Adjust OHLC by factor/date-range-latest-factor, without filling dates."""
+    """按因子与区间最新因子之比调整 OHLC，不填充日期。"""
     data = _dated_frame(bars, BAR_COLUMNS)
     factor_series = factors.copy()
     factor_series.index = pd.to_datetime(factor_series.index, errors="raise").normalize()
@@ -132,20 +133,21 @@ def adjust_ohlc(bars: pd.DataFrame, factors: pd.Series) -> pd.DataFrame:
 
 
 class AmazingDataProvider:
-    """Adapt the local AmazingData code-list, bar, and factor interfaces."""
+    """适配 AmazingData 的 ETF 代码表、日线与复权因子接口。"""
 
-    def __init__(self, code_table: object, bars_query, factors_query):
+    def __init__(self, code_table: object, bars_query, factors_query, calendar=None):
         self.code_table = code_table
         self.bars_query = bars_query
         self.factors_query = factors_query
+        self.calendar = calendar
 
     @classmethod
     def from_sdk(
         cls, base_data: object, market_data: object, *, period: object
     ) -> AmazingDataProvider:
-        """Build a provider from AmazingData BaseData and MarketData clients."""
+        """使用 AmazingData 客户端构建数据提供器。"""
         code_table = base_data.get_code_list(security_type="EXTRA_ETF")
-
+        calendar = base_data.get_calendar()
         def bars_query(sdk_code: str, start: date, end: date) -> pd.DataFrame:
             result = market_data.query_kline(
                 [sdk_code],
@@ -162,7 +164,7 @@ class AmazingDataProvider:
                 raise ValueError(f"Missing backward factor column for {sdk_code}")
             return pd.DataFrame({"Factor": result[sdk_code]}, index=result.index)
 
-        return cls(code_table, bars_query, factors_query)
+        return cls(code_table, bars_query, factors_query, calendar)
 
     def fetch_bars(self, symbol: str, start: date, end: date) -> pd.DataFrame:
         code = resolve_etf_code(symbol, self.code_table)
@@ -171,6 +173,14 @@ class AmazingDataProvider:
     def fetch_factors(self, symbol: str, start: date, end: date) -> pd.DataFrame:
         code = resolve_etf_code(symbol, self.code_table)
         return self.factors_query(code, start, end)
+    def trading_sessions(self, start: date, end: date) -> pd.DatetimeIndex:
+        values = self.calendar
+        if isinstance(values, pd.DataFrame):
+            values = values.iloc[:, 0].tolist()
+        sessions = pd.to_datetime(pd.Series(values).astype(str), format="%Y%m%d", errors="coerce")
+        return pd.DatetimeIndex(sessions.dropna().loc[
+            (sessions.dropna() >= pd.Timestamp(start)) & (sessions.dropna() <= pd.Timestamp(end))
+        ]).normalize()
 
 
 class MarketDataService:
@@ -188,20 +198,30 @@ class MarketDataService:
     def load(self, symbol: str, start: date, end: date, *, refresh: bool = False) -> pd.DataFrame:
         path = self._path(symbol)
         factor_path = path.with_name(f"{path.stem}.factors.csv")
+        sessions_path = path.with_name(f"{path.stem}.sessions.csv")
         if refresh:
             bars = _dated_frame(self.provider.fetch_bars(symbol, start, end), BAR_COLUMNS)
             factors = _dated_frame(self.provider.fetch_factors(symbol, start, end), ["Factor"])
+            if hasattr(self.provider, "trading_sessions"):
+                sessions = self.provider.trading_sessions(start, end)
+            else:
+                sessions = pd.bdate_range(start, end)
             path.parent.mkdir(parents=True, exist_ok=True)
             bars.to_csv(path, index_label="Date")
             factors.to_csv(factor_path, index_label="Date")
+            pd.DataFrame({"Date": sessions}).to_csv(sessions_path, index=False)
         else:
-            if not path.exists() or not factor_path.exists():
-                raise FileNotFoundError(f"No complete cached data for {symbol}; use explicit refresh")
+            if not path.exists() or not factor_path.exists() or not sessions_path.exists():
+                raise FileNotFoundError(f"No complete cache for {symbol}; use --refresh")
             bars = _dated_frame(pd.read_csv(path, parse_dates=["Date"]), BAR_COLUMNS)
             factors = _dated_frame(pd.read_csv(factor_path, parse_dates=["Date"]), ["Factor"])
+            sessions = pd.DatetimeIndex(pd.to_datetime(
+                pd.read_csv(sessions_path)["Date"], errors="raise"
+            )).normalize()
         first, last = pd.Timestamp(start), pd.Timestamp(end)
         selected = bars.loc[first:last, BAR_COLUMNS]
-        missing = pd.bdate_range(first, last).difference(selected.index)
+        expected = sessions[(sessions >= first) & (sessions <= last)]
+        missing = expected.difference(selected.index)
         if selected.empty or len(missing):
             raise ValueError(f"Cached bars do not cover requested trading sessions: {start} to {end}")
         result = adjust_ohlc(selected, factors.loc[selected.index, "Factor"])

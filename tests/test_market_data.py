@@ -33,6 +33,8 @@ class FakeProvider:
         return pd.DataFrame(
             {"Date": ["2024-01-02", "2024-01-03"], "Factor": [2.0, 4.0]}
         )
+    def trading_sessions(self, start, end):
+        return pd.DatetimeIndex(["2024-01-02", "2024-01-03"])
 
 
 def test_adjustment_scales_every_ohlc_field_and_preserves_volume():
@@ -91,29 +93,27 @@ def test_sdk_adapter_uses_extra_etf_queries_and_normalizes_results():
             assert security_type == "EXTRA_ETF"
             return pd.DataFrame({"name": ["ETF"]}, index=["SH.563360"])
 
-        def get_adj_factor(self, codes):
+        def get_backward_factor(self, codes, local_path=None, is_local=True):
             assert codes == ["SH.563360"]
             return pd.DataFrame(
-                {
-                    "trade_date": ["2024-01-02", "2024-01-03"],
-                    "adj_factor": [2.0, 4.0],
-                }
+                {"SH.563360": [2.0, 4.0]},
+                index=pd.to_datetime(["2024-01-02", "2024-01-03"]),
             )
+
+        def get_calendar(self):
+            return [20240102, 20240103]
 
     class FakeMarketData:
         def query_kline(self, codes, begin_date, end_date, period):
             assert codes == ["SH.563360"]
             assert (begin_date, end_date, period) == (20240102, 20240103, 10008)
-            return pd.DataFrame(
-                {
-                    "trade_date": ["2024-01-02", "2024-01-03"],
-                    "open": [10.0, 11.0],
-                    "high": [12.0, 13.0],
-                    "low": [9.0, 10.0],
-                    "close": [11.0, 12.0],
-                    "volume": [100, 200],
-                }
-            )
+            return pd.DataFrame({
+                "kline_time": ["2024-01-02", "2024-01-02"],
+                "code": ["SH.588000", "SH.563360"],
+                "open": [20.0, 10.0], "high": [22.0, 12.0],
+                "low": [19.0, 9.0], "close": [21.0, 11.0],
+                "volume": [500, 100],
+            })
 
     provider = AmazingDataProvider.from_sdk(
         FakeBaseData(), FakeMarketData(), period=10008
@@ -126,9 +126,13 @@ def test_sdk_adapter_uses_extra_etf_queries_and_normalizes_results():
     )
 
     assert list(bars.columns) == ["Open", "High", "Low", "Close", "Volume"]
+    assert bars["Close"].tolist() == [11.0]
     assert bars.index.name == "Date"
     assert factors.index.name == "Date"
     assert factors["Factor"].tolist() == [2.0, 4.0]
+    assert provider.trading_sessions(
+        date(2024, 1, 2), date(2024, 1, 3)
+    ).tolist() == list(pd.to_datetime(["2024-01-02", "2024-01-03"]))
 
 
 def test_resolves_etf_from_dataframe_index():
@@ -154,6 +158,16 @@ def test_cache_requires_coverage_and_refresh_is_explicit(tmp_path):
 
     service.load("563360", date(2024, 1, 2), date(2024, 1, 3))
     assert provider.market_calls == 1
+    assert provider.factor_calls == 1
+    assert service.last_metadata["cache_status"] == "hit"
+    assert service.last_metadata["adjustment_reference_date"] == "2024-01-03"
+    service.load("563360", date(2024, 1, 2), date(2024, 1, 7))
+    bars_path = tmp_path / "563360.csv"
+    cached = pd.read_csv(bars_path)
+    cached = cached[cached.Date != "2024-01-03"]
+    cached.to_csv(bars_path, index=False)
+    with pytest.raises(ValueError, match="sessions"):
+        service.load("563360", date(2024, 1, 2), date(2024, 1, 3))
     with pytest.raises(ValueError, match="cover"):
         service.load("563360", date(2024, 1, 1), date(2024, 1, 3))
 
