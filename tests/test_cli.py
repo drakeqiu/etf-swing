@@ -70,10 +70,10 @@ def test_cli_exports_consistent_offline_run(tmp_path, monkeypatch) -> None:
     assert saved["cost_assumptions"]["spread"] == 0
 
     for name in (
-        "AMAZINGDATA_USERNAME",
-        "AMAZINGDATA_PASSWORD",
-        "AMAZINGDATA_HOST",
-        "AMAZINGDATA_PORT",
+        "AD_USERNAME",
+        "AD_PASSWORD",
+        "AD_HOST",
+        "AD_PORT",
     ):
         monkeypatch.delenv(name, raising=False)
     main(

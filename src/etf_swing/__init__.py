@@ -141,10 +141,10 @@ def main(
     from AmazingData import BaseData, MarketData, login, logout
     from AmazingData.query_api.market_data import Period
 
-    username = os.environ["AMAZINGDATA_USERNAME"]
-    password = os.environ["AMAZINGDATA_PASSWORD"]
-    host = os.environ["AMAZINGDATA_HOST"]
-    port = int(os.environ["AMAZINGDATA_PORT"])
+    username = os.environ["AD_USERNAME"]
+    password = os.environ["AD_PASSWORD"]
+    host = os.environ["AD_HOST"]
+    port = int(os.environ["AD_PORT"])
     login(username, password, host, port)
     try:
         base_data = BaseData()
