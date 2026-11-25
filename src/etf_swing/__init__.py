@@ -4,17 +4,25 @@ from __future__ import annotations
 
 import argparse
 import json
-import math
 import os
 from datetime import date
 from pathlib import Path
 from typing import Any
 
 from .backtest import (
-    COMMISSION_RATE, DEFAULT_SPREAD, FAST_SMA_PERIOD, INITIAL_CASH,
-    MIN_COMMISSION, SLOW_SMA_PERIOD, run_backtest,
+    COMMISSION_RATE,
+    DEFAULT_SPREAD,
+    FAST_SMA_PERIOD,
+    INITIAL_CASH,
+    MIN_COMMISSION,
+    SLOW_SMA_PERIOD,
+    run_backtest,
 )
-from .market_data import AmazingDataProvider, MarketDataService
+from .market_data import (
+    AmazingDataProvider,
+    MarketDataProvider,
+    MarketDataService,
+)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -45,7 +53,9 @@ def _artifacts(
     profit_factor = float(gains / losses) if losses else None
     metrics = {
         "total_return": float(stats["Return [%]"]) / 100,
-        "profit_factor": float(profit_factor) if profit_factor is not None else None,
+        "profit_factor": float(profit_factor)
+        if profit_factor is not None
+        else None,
         "max_drawdown": float(stats["Max. Drawdown [%]"]) / 100,
         "trade_count": int(len(closed)),
         "mean_holding_period": hold,
@@ -55,7 +65,11 @@ def _artifacts(
         "symbol": symbol,
         "start": start.isoformat(),
         "end": end.isoformat(),
-        "strategy": {"name": "SMA crossover", "fast_period": FAST_SMA_PERIOD, "slow_period": SLOW_SMA_PERIOD},
+        "strategy": {
+            "name": "SMA crossover",
+            "fast_period": FAST_SMA_PERIOD,
+            "slow_period": SLOW_SMA_PERIOD,
+        },
         "initial_cash": INITIAL_CASH,
         "cost_assumptions": {
             "commission_rate_per_side": COMMISSION_RATE,
@@ -69,7 +83,9 @@ def _artifacts(
     }
 
 
-def run_cli(args: argparse.Namespace, provider: object) -> dict[str, object]:
+def run_cli(
+    args: argparse.Namespace, provider: MarketDataProvider
+) -> dict[str, object]:
     """通过注入数据提供器运行，不初始化 SDK。"""
     data = MarketDataService(provider, args.cache_dir).load(
         args.symbol, args.start, args.end, refresh=args.refresh
@@ -80,15 +96,22 @@ def run_cli(args: argparse.Namespace, provider: object) -> dict[str, object]:
     args.output_dir.mkdir(parents=True, exist_ok=True)
     result["_equity"].to_csv(args.output_dir / "equity.csv")
     result["_trades"].to_csv(args.output_dir / "trades.csv", index=False)
-    public = {key: value for key, value in result.items() if not key.startswith("_")}
+    public = {
+        key: value for key, value in result.items() if not key.startswith("_")
+    }
     (args.output_dir / "result.json").write_text(
-        json.dumps(public, ensure_ascii=False, indent=2, allow_nan=False) + "\n",
+        json.dumps(public, ensure_ascii=False, indent=2, allow_nan=False)
+        + "\n",
         encoding="utf-8",
     )
     return public
 
 
-def main(args: list[str] | None = None, provider: object | None = None) -> None:
+def main(
+    args: list[str] | None = None,
+    provider: MarketDataProvider | None = None,
+) -> None:
+    """运行缓存回测，或在显式刷新时于命令边界认证 SDK。"""
     parsed = _parser().parse_args(args)
     if parsed.start > parsed.end:
         raise SystemExit("--start must not be after --end")
@@ -96,12 +119,22 @@ def main(args: list[str] | None = None, provider: object | None = None) -> None:
         run_cli(parsed, provider)
         return
     if not parsed.refresh:
+
         class CacheOnlyProvider:
-            def fetch_bars(self, *args):
+            def fetch_bars(self, symbol: str, start: date, end: date) -> Any:
                 raise AssertionError("cache-only access must not fetch bars")
 
-            def fetch_factors(self, *args):
-                raise AssertionError("cache-only access must not fetch factors")
+            def fetch_factors(
+                self, symbol: str, start: date, end: date
+            ) -> Any:
+                raise AssertionError(
+                    "cache-only access must not fetch factors"
+                )
+
+            def trading_sessions(self, start: date, end: date) -> Any:
+                raise AssertionError(
+                    "cache-only access must not query calendar"
+                )
 
         run_cli(parsed, CacheOnlyProvider())
         return
@@ -115,9 +148,10 @@ def main(args: list[str] | None = None, provider: object | None = None) -> None:
     login(username, password, host, port)
     try:
         base_data = BaseData()
-        market_data = MarketData(base_data.get_calendar())
+        calendar = base_data.get_calendar()
+        market_data = MarketData(calendar)
         sdk_provider = AmazingDataProvider.from_sdk(
-            base_data, market_data, period=Period.day.value
+            base_data, market_data, period=Period.day.value, calendar=calendar
         )
         run_cli(parsed, sdk_provider)
     finally:

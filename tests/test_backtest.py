@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import pandas as pd
+from synthetic_data import synthetic_data
 
 from etf_swing.backtest import commission, run_backtest
-from synthetic_data import synthetic_data
+
+
 def test_commission_proportional_and_minimum() -> None:
     assert commission(100, 100) == 0.5
     assert commission(100, 10) == 0.1
@@ -34,3 +37,19 @@ def test_commission_is_charged_on_both_sides() -> None:
     expected = max(abs(trade.Size) * trade.EntryPrice * 0.00005, 0.1)
     expected += max(abs(trade.Size) * trade.ExitPrice * 0.00005, 0.1)
     assert trade.Commission == expected
+
+
+def test_final_bar_signal_is_not_filled_at_its_open() -> None:
+    close = [100.0] * 60 + [200.0]
+    data = pd.DataFrame(
+        {
+            "Open": close,
+            "High": close,
+            "Low": close,
+            "Close": close,
+            "Volume": [1_000] * len(close),
+        },
+        index=pd.bdate_range("2024-01-01", periods=len(close)),
+    )
+
+    assert run_backtest(data, spread=0)["_trades"].empty

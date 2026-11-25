@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 from backtesting import Backtest, Strategy
@@ -35,6 +35,7 @@ def sma(values: object, period: int) -> object:
 
 class SmaCross(Strategy):
     """快线高于慢线时持有多头，否则保持空仓。"""
+
     spread = DEFAULT_SPREAD
 
     def init(self) -> None:
@@ -45,9 +46,16 @@ class SmaCross(Strategy):
         if self.fast[-1] > self.slow[-1]:
             if not self.position:
                 price_with_costs = self.data.Close[-1] * (1 + self.spread)
-                affordable = self.equity / (price_with_costs * (1 + COMMISSION_RATE))
+                affordable = self.equity / (
+                    price_with_costs * (1 + COMMISSION_RATE)
+                )
                 size = int(affordable / LOT_SIZE) * LOT_SIZE
-                while size and size * price_with_costs + commission(size, price_with_costs) > self.equity:
+                while (
+                    size
+                    and size * price_with_costs
+                    + commission(size, price_with_costs)
+                    > self.equity
+                ):
                     size -= LOT_SIZE
                 if size:
                     self.buy(size=size)
@@ -55,7 +63,7 @@ class SmaCross(Strategy):
             self.position.close()
 
 
-def run_backtest(data: pd.DataFrame, spread: float = DEFAULT_SPREAD):
+def run_backtest(data: pd.DataFrame, spread: float = DEFAULT_SPREAD) -> Any:
     """按项目执行假设运行长仓/空仓示例策略。"""
     backtest = Backtest(
         data,
