@@ -26,10 +26,10 @@ uv sync
 只有要从 AmazingData 刷新行情时才需要账号凭据。在项目根目录创建本机 `.env` 文件，写入下面四项，并把示例值换成你的真实信息：
 
 ```dotenv
-AMAZINGDATA_USERNAME=你的用户名
-AMAZINGDATA_PASSWORD=你的密码
-AMAZINGDATA_HOST=你的服务主机
-AMAZINGDATA_PORT=你的服务端口
+AD_USERNAME=你的用户名
+AD_PASSWORD=你的密码
+AD_HOST=你的服务主机
+AD_PORT=你的服务端口
 ```
 
 不要把真实凭据贴到聊天、提交到 Git 或写进文档。`.env` 已被 Git 忽略。普通缓存回测不登录 AmazingData，也不需要 `.env`；刷新时才会读取这些变量。

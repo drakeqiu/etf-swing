@@ -17,10 +17,10 @@ uv sync
 刷新行情需要 AmazingData 本机环境、账号和行情权限。在仓库根目录创建 `.env`，填入本机凭据：
 
 ```dotenv
-AMAZINGDATA_USERNAME=你的用户名
-AMAZINGDATA_PASSWORD=你的密码
-AMAZINGDATA_HOST=你的服务主机
-AMAZINGDATA_PORT=你的服务端口
+AD_USERNAME=你的用户名
+AD_PASSWORD=你的密码
+AD_HOST=你的服务主机
+AD_PORT=你的服务端口
 ```
 
 不要分享或提交真实凭据。然后执行刷新和回测：
