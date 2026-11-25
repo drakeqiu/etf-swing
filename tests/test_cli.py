@@ -58,7 +58,7 @@ def test_cli_default_spread_and_cache_metadata(tmp_path) -> None:
 def test_cli_exports_null_profit_factor_when_no_trade_loses(tmp_path) -> None:
     class RisingProvider(SyntheticProvider):
         def __init__(self):
-            close = list(range(100, 400))
+            close = list(range(100, 500))
             self.bars = pd.DataFrame(
                 {"Open": close, "High": close, "Low": close, "Close": close, "Volume": 1000},
                 index=pd.bdate_range("2024-01-01", periods=len(close)),
