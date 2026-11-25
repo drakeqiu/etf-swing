@@ -9,6 +9,12 @@ wheels/
 # Virtual environments
 .venv
 
+# Local caches and generated results
+.env
+.cache/
+data/cache/
+results/
+
 # Local machine files
 .envrc
 *.log
