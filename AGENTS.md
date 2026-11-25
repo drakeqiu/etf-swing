@@ -11,3 +11,7 @@ Use the five default labels: needs-triage, needs-info, ready-for-agent, ready-fo
 ### Domain docs
 
 This is a single-context repo: read root CONTEXT.md and relevant docs/adr/ decisions. See `docs/agents/domain.md`.
+
+## Language
+
+Write all project context in Chinese.

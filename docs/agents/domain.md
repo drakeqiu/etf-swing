@@ -2,6 +2,10 @@
 
 How the engineering skills should consume this repo's domain documentation when exploring the codebase.
 
+## Language
+
+Write all project context documents, including `CONTEXT.md` and `CONTEXT-MAP.md`, in Chinese.
+
 ## Before exploring, read these
 
 - **`CONTEXT.md`** at the repo root, or
