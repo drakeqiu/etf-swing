@@ -88,7 +88,7 @@ def test_sdk_adapter_uses_extra_etf_queries_and_normalizes_results():
     assert list(bars.columns) == ["Open", "High", "Low", "Close", "Volume"]
     assert bars.index.name == "Date"
     assert factors.index.name == "Date"
-    assert factors.tolist() == [2.0, 4.0]
+    assert factors["Factor"].tolist() == [2.0, 4.0]
 
 
 def test_resolves_etf_from_dataframe_index():
