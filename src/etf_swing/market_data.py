@@ -17,25 +17,96 @@ class MarketDataProvider(Protocol):
     def fetch_factors(self, sdk_code: str, start: date, end: date) -> pd.DataFrame: ...
 
 
+def _code_tokens(value: object) -> set[str]:
+    parts = str(value).replace("_", ".").replace("-", ".").split(".")
+    return {part for part in parts if part}
+
+
 def resolve_etf_code(symbol: str, code_table: object) -> str:
     """Resolve a bare ETF code against the SDK's EXTRA_ETF table."""
-    target = symbol.split(".", maxsplit=1)[0]
+    parts = str(symbol).replace("_", ".").replace("-", ".").split(".")
+    target = next((part for part in reversed(parts) if part.isdigit()), symbol)
+
     if isinstance(code_table, dict):
-        entries = code_table.keys()
+        values = code_table.keys()
     elif isinstance(code_table, pd.DataFrame):
-        entries = code_table.iloc[:, 0].astype(str)
+        values = [
+            *code_table.index.tolist(),
+            *code_table.astype(str).to_numpy().ravel().tolist(),
+        ]
     else:
-        entries = code_table  # SDK may expose the table as an iterable.
-    matches = [str(code) for code in entries if str(code).split(".", 1)[0] == target]
+        values = code_table  # SDK may expose the table as an iterable.
+    matches = {str(value) for value in values if target in _code_tokens(value)}
+    if len(matches) > 1:
+        exchange_codes = {value for value in matches if "." in value}
+        if len(exchange_codes) == 1:
+            matches = exchange_codes
     if len(matches) != 1:
         raise ValueError(f"ETF code {symbol!r} has {len(matches)} SDK matches")
-    return matches[0]
+    return next(iter(matches))
+
+
+def _sdk_frame(
+    result: object,
+    sdk_code: str,
+    required: list[str],
+    aliases: dict[str, str],
+) -> pd.DataFrame:
+    """Normalize an AmazingData result while rejecting unknown field layouts."""
+    if isinstance(result, dict):
+        for key in (sdk_code, sdk_code.split(".")[-1]):
+            if key in result:
+                result = result[key]
+                break
+    if not isinstance(result, pd.DataFrame):
+        raise ValueError("AmazingData query did not return a DataFrame")
+    frame = result.copy()
+    if isinstance(frame.index, pd.MultiIndex):
+        frame = frame.reset_index()
+    for column in ("code", "symbol", "security_code"):
+        if column in frame.columns:
+            code_tokens = _code_tokens(sdk_code)
+            matches = frame[column].astype(str).map(
+                lambda value: bool(code_tokens & _code_tokens(value))
+            )
+            frame = frame.loc[matches]
+            break
+    renames = {
+        column: aliases[column.strip().lower()]
+        for column in frame.columns
+        if column.strip().lower() in aliases
+    }
+    frame = frame.rename(columns=renames)
+    return _dated_frame(frame, required)
+
+
+_BAR_ALIASES = {
+    "date": "Date",
+    "trade_date": "Date",
+    "datetime": "Date",
+    "open": "Open",
+    "high": "High",
+    "low": "Low",
+    "close": "Close",
+    "volume": "Volume",
+    "vol": "Volume",
+}
+_FACTOR_ALIASES = {
+    "date": "Date",
+    "trade_date": "Date",
+    "datetime": "Date",
+    "factor": "Factor",
+    "adj_factor": "Factor",
+    "backward_factor": "Factor",
+}
 
 
 def _dated_frame(frame: pd.DataFrame, required: list[str]) -> pd.DataFrame:
     result = frame.copy()
     if "Date" in result.columns:
         result = result.set_index("Date")
+    if pd.api.types.is_integer_dtype(result.index):
+        result.index = result.index.astype(str)
     result.index = pd.to_datetime(result.index, errors="raise").normalize()
     result.index.name = "Date"
     missing = set(required).difference(result.columns)
@@ -67,18 +138,43 @@ def adjust_ohlc(bars: pd.DataFrame, factors: pd.Series) -> pd.DataFrame:
 
 
 class AmazingDataProvider:
-    """Adapter over SDK code table and injected SDK query callables."""
+    """Adapt the local AmazingData code-list, bar, and factor interfaces."""
 
     def __init__(self, code_table: object, bars_query, factors_query):
         self.code_table = code_table
         self.bars_query = bars_query
         self.factors_query = factors_query
 
+    @classmethod
+    def from_sdk(
+        cls, base_data: object, market_data: object, *, period: object
+    ) -> AmazingDataProvider:
+        """Build a provider from AmazingData BaseData and MarketData clients."""
+        code_table = base_data.get_code_list(security_type="EXTRA_ETF")
+
+        def bars_query(sdk_code: str, start: date, end: date) -> pd.DataFrame:
+            result = market_data.query_kline(
+                [sdk_code],
+                begin_date=int(start.strftime("%Y%m%d")),
+                end_date=int(end.strftime("%Y%m%d")),
+                period=period,
+            )
+            return _sdk_frame(result, sdk_code, BAR_COLUMNS, _BAR_ALIASES)
+
+        def factors_query(sdk_code: str, start: date, end: date) -> pd.DataFrame:
+            del start, end
+            result = base_data.get_adj_factor([sdk_code])
+            return _sdk_frame(result, sdk_code, ["Factor"], _FACTOR_ALIASES)
+
+        return cls(code_table, bars_query, factors_query)
+
     def fetch_bars(self, symbol: str, start: date, end: date) -> pd.DataFrame:
-        return self.bars_query(resolve_etf_code(symbol, self.code_table), start, end)
+        code = resolve_etf_code(symbol, self.code_table)
+        return self.bars_query(code, start, end)
 
     def fetch_factors(self, symbol: str, start: date, end: date) -> pd.DataFrame:
-        return self.factors_query(resolve_etf_code(symbol, self.code_table), start, end)
+        code = resolve_etf_code(symbol, self.code_table)
+        return self.factors_query(code, start, end)
 
 
 class MarketDataService:

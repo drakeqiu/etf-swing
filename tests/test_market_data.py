@@ -45,6 +45,55 @@ def test_resolves_etf_and_adapter_queries_sdk_code():
     adapter.fetch_bars("563360", date(2024, 1, 2), date(2024, 1, 3))
     adapter.fetch_factors("563360", date(2024, 1, 2), date(2024, 1, 3))
     assert queried == ["563360.SH", "563360.SH"]
+def test_sdk_adapter_uses_extra_etf_queries_and_normalizes_results():
+    class FakeBaseData:
+        def get_code_list(self, security_type):
+            assert security_type == "EXTRA_ETF"
+            return pd.DataFrame({"name": ["ETF"]}, index=["SH.563360"])
+
+        def get_adj_factor(self, codes):
+            assert codes == ["SH.563360"]
+            return pd.DataFrame(
+                {
+                    "trade_date": ["2024-01-02", "2024-01-03"],
+                    "adj_factor": [2.0, 4.0],
+                }
+            )
+
+    class FakeMarketData:
+        def query_kline(self, codes, begin_date, end_date, period):
+            assert codes == ["SH.563360"]
+            assert (begin_date, end_date, period) == (20240102, 20240103, 10008)
+            return pd.DataFrame(
+                {
+                    "trade_date": ["2024-01-02", "2024-01-03"],
+                    "open": [10.0, 11.0],
+                    "high": [12.0, 13.0],
+                    "low": [9.0, 10.0],
+                    "close": [11.0, 12.0],
+                    "volume": [100, 200],
+                }
+            )
+
+    provider = AmazingDataProvider.from_sdk(
+        FakeBaseData(), FakeMarketData(), period=10008
+    )
+    bars = provider.fetch_bars(
+        "563360", date(2024, 1, 2), date(2024, 1, 3)
+    )
+    factors = provider.fetch_factors(
+        "563360", date(2024, 1, 2), date(2024, 1, 3)
+    )
+
+    assert list(bars.columns) == ["Open", "High", "Low", "Close", "Volume"]
+    assert bars.index.name == "Date"
+    assert factors.index.name == "Date"
+    assert factors.tolist() == [2.0, 4.0]
+
+
+def test_resolves_etf_from_dataframe_index():
+    table = pd.DataFrame({"name": ["ETF"]}, index=["SH.563360"])
+    assert resolve_etf_code("563360", table) == "SH.563360"
 
 
 def test_cache_requires_coverage_and_refresh_is_explicit(tmp_path):
