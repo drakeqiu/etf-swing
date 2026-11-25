@@ -1,4 +1,4 @@
-"""ETF daily bars, local cache, and strict forward adjustment."""
+"""ETF日线、项目缓存与严格前复权数据管线。"""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ from datetime import date
 from pathlib import Path
 from typing import Protocol
 
+import numpy as np
 import pandas as pd
 
 BAR_COLUMNS = ["Open", "High", "Low", "Close", "Volume"]
@@ -63,13 +64,12 @@ def _sdk_frame(
     frame = result.copy()
     if isinstance(frame.index, pd.MultiIndex):
         frame = frame.reset_index()
-    for column in ("code", "symbol", "security_code"):
+    for column in ("code", "symbol", "security_code", "ticker"):
         if column in frame.columns:
-            code_tokens = _code_tokens(sdk_code)
-            matches = frame[column].astype(str).map(
-                lambda value: bool(code_tokens & _code_tokens(value))
-            )
-            frame = frame.loc[matches]
+            normalized = sdk_code.upper().replace("_", ".").replace("-", ".")
+            frame = frame.loc[frame[column].astype(str).map(
+                lambda value: value.upper().replace("_", ".").replace("-", ".") == normalized
+            )]
             break
     renames = {
         column: aliases[column.strip().lower()]
@@ -81,15 +81,9 @@ def _sdk_frame(
 
 
 _BAR_ALIASES = {
-    "date": "Date",
-    "trade_date": "Date",
-    "datetime": "Date",
-    "open": "Open",
-    "high": "High",
-    "low": "Low",
-    "close": "Close",
-    "volume": "Volume",
-    "vol": "Volume",
+    "date": "Date", "trade_date": "Date", "datetime": "Date",
+    "kline_time": "Date", "open": "Open", "high": "High",
+    "low": "Low", "close": "Close", "volume": "Volume", "vol": "Volume",
 }
 _FACTOR_ALIASES = {
     "date": "Date",
@@ -163,8 +157,10 @@ class AmazingDataProvider:
 
         def factors_query(sdk_code: str, start: date, end: date) -> pd.DataFrame:
             del start, end
-            result = base_data.get_adj_factor([sdk_code])
-            return _sdk_frame(result, sdk_code, ["Factor"], _FACTOR_ALIASES)
+            result = base_data.get_backward_factor([sdk_code], is_local=True)
+            if not isinstance(result, pd.DataFrame) or sdk_code not in result.columns:
+                raise ValueError(f"Missing backward factor column for {sdk_code}")
+            return pd.DataFrame({"Factor": result[sdk_code]}, index=result.index)
 
         return cls(code_table, bars_query, factors_query)
 
@@ -178,9 +174,12 @@ class AmazingDataProvider:
 
 
 class MarketDataService:
+    """管理行情与因子CSV缓存，并返回可回测的前复权数据。"""
+
     def __init__(self, provider: MarketDataProvider, cache_dir: Path):
         self.provider = provider
         self.cache_dir = Path(cache_dir)
+        self.last_metadata: dict[str, object] = {}
 
     def _path(self, symbol: str) -> Path:
         safe_symbol = "".join(c for c in symbol if c.isalnum() or c in "-_ .")
@@ -188,19 +187,29 @@ class MarketDataService:
 
     def load(self, symbol: str, start: date, end: date, *, refresh: bool = False) -> pd.DataFrame:
         path = self._path(symbol)
+        factor_path = path.with_name(f"{path.stem}.factors.csv")
         if refresh:
             bars = _dated_frame(self.provider.fetch_bars(symbol, start, end), BAR_COLUMNS)
+            factors = _dated_frame(self.provider.fetch_factors(symbol, start, end), ["Factor"])
             path.parent.mkdir(parents=True, exist_ok=True)
             bars.to_csv(path, index_label="Date")
+            factors.to_csv(factor_path, index_label="Date")
         else:
-            if not path.exists():
-                raise FileNotFoundError(f"No cached bars for {symbol}; use explicit refresh")
+            if not path.exists() or not factor_path.exists():
+                raise FileNotFoundError(f"No complete cached data for {symbol}; use explicit refresh")
             bars = _dated_frame(pd.read_csv(path, parse_dates=["Date"]), BAR_COLUMNS)
+            factors = _dated_frame(pd.read_csv(factor_path, parse_dates=["Date"]), ["Factor"])
         first, last = pd.Timestamp(start), pd.Timestamp(end)
-        if bars.empty or bars.index.min() > first or bars.index.max() < last:
-            raise ValueError(f"Cached bars do not cover requested interval {start} to {end}")
-        bars = bars.loc[first:last, BAR_COLUMNS]
-        factor_frame = _dated_frame(
-            self.provider.fetch_factors(symbol, start, end), ["Factor"]
-        )
-        return adjust_ohlc(bars, factor_frame["Factor"])
+        selected = bars.loc[first:last, BAR_COLUMNS]
+        missing = pd.bdate_range(first, last).difference(selected.index)
+        if selected.empty or len(missing):
+            raise ValueError(f"Cached bars do not cover requested trading sessions: {start} to {end}")
+        result = adjust_ohlc(selected, factors.loc[selected.index, "Factor"])
+        self.last_metadata = {
+            "data_coverage_start": selected.index.min().date().isoformat(),
+            "data_coverage_end": selected.index.max().date().isoformat(),
+            "adjustment_reference_date": selected.index.max().date().isoformat(),
+            "cache_status": "refreshed" if refresh else "hit",
+        }
+        result.attrs.update(self.last_metadata)
+        return result

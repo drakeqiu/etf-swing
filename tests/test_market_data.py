@@ -29,9 +29,49 @@ class FakeProvider:
         )
 
     def fetch_factors(self, sdk_code, start, end):
+        self.factor_calls = getattr(self, "factor_calls", 0) + 1
         return pd.DataFrame(
             {"Date": ["2024-01-02", "2024-01-03"], "Factor": [2.0, 4.0]}
         )
+
+
+def test_adjustment_scales_every_ohlc_field_and_preserves_volume():
+    bars = pd.DataFrame(
+        {"Open": [10.0, 11.0], "High": [12.0, 13.0], "Low": [9.0, 10.0],
+         "Close": [11.0, 12.0], "Volume": [100, 200]},
+        index=pd.to_datetime(["2024-01-02", "2024-01-03"]),
+    )
+    adjusted = adjust_ohlc(bars, pd.Series([2.0, 4.0], index=bars.index))
+    assert adjusted.loc["2024-01-02"].to_dict() == {
+        "Open": 5.0, "High": 6.0, "Low": 4.5, "Close": 5.5, "Volume": 100
+    }
+    assert adjusted.loc["2024-01-03"].to_dict() == {
+        "Open": 11.0, "High": 13.0, "Low": 10.0, "Close": 12.0, "Volume": 200
+    }
+
+
+def test_sdk_filters_exact_symbol_and_supports_vendor_timestamp_and_factor_api():
+    class Base:
+        def get_code_list(self, security_type):
+            return pd.DataFrame({"name": ["ETF", "ETF"]}, index=["SH.563360", "SH.588000"])
+
+        def get_backward_factor(self, codes, local_path=None, is_local=True):
+            assert codes == ["SH.563360"]
+            return pd.DataFrame({"SH.563360": [2.0]}, index=pd.to_datetime(["2024-01-02"]))
+
+    class Market:
+        def query_kline(self, codes, begin_date, end_date, period):
+            return pd.DataFrame({
+                "kline_time": ["2024-01-02"], "code": ["SH.563360"],
+                "open": [10], "high": [12], "low": [9], "close": [11], "volume": [10],
+            })
+
+    provider = AmazingDataProvider.from_sdk(Base(), Market(), period=10008)
+    bars = provider.fetch_bars("563360", date(2024, 1, 2), date(2024, 1, 2))
+    factors = provider.fetch_factors("563360", date(2024, 1, 2), date(2024, 1, 2))
+    assert list(bars.Close) == [11]
+    assert list(factors.Factor) == [2]
+
 
 
 def test_resolves_etf_and_adapter_queries_sdk_code():

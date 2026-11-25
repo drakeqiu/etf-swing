@@ -11,11 +11,8 @@ from pathlib import Path
 from typing import Any
 
 from .backtest import (
-    COMMISSION_RATE,
-    DEFAULT_SPREAD,
-    INITIAL_CASH,
-    MIN_COMMISSION,
-    run_backtest,
+    COMMISSION_RATE, DEFAULT_SPREAD, FAST_SMA_PERIOD, INITIAL_CASH,
+    MIN_COMMISSION, SLOW_SMA_PERIOD, run_backtest,
 )
 from .market_data import AmazingDataProvider, MarketDataService
 
@@ -43,9 +40,9 @@ def _artifacts(
         if not closed.empty
         else None
     )
-    profit_factor = stats["Profit Factor"]
-    if profit_factor is not None and not math.isfinite(float(profit_factor)):
-        profit_factor = None
+    gains = closed.loc[closed["PnL"] > 0, "PnL"].sum()
+    losses = -closed.loc[closed["PnL"] < 0, "PnL"].sum()
+    profit_factor = float(gains / losses) if losses else None
     metrics = {
         "total_return": float(stats["Return [%]"]) / 100,
         "profit_factor": float(profit_factor) if profit_factor is not None else None,
@@ -58,7 +55,7 @@ def _artifacts(
         "symbol": symbol,
         "start": start.isoformat(),
         "end": end.isoformat(),
-        "strategy": {"name": "SMA crossover", "fast_period": 20, "slow_period": 60},
+        "strategy": {"name": "SMA crossover", "fast_period": FAST_SMA_PERIOD, "slow_period": SLOW_SMA_PERIOD},
         "initial_cash": INITIAL_CASH,
         "cost_assumptions": {
             "commission_rate_per_side": COMMISSION_RATE,
@@ -73,12 +70,13 @@ def _artifacts(
 
 
 def run_cli(args: argparse.Namespace, provider: object) -> dict[str, object]:
-    """Run via an injected data provider without SDK setup."""
+    """通过注入数据提供器运行，不初始化 SDK。"""
     data = MarketDataService(provider, args.cache_dir).load(
         args.symbol, args.start, args.end, refresh=args.refresh
     )
     stats = run_backtest(data, spread=args.spread)
     result = _artifacts(stats, args.symbol, args.start, args.end, args.spread)
+    result.update(data.attrs)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     result["_equity"].to_csv(args.output_dir / "equity.csv")
     result["_trades"].to_csv(args.output_dir / "trades.csv", index=False)

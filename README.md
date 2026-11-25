@@ -10,11 +10,12 @@ uv run --env-file .env etf-swing --start 2024-01-01 --end 2025-12-31 --refresh
 ```
 
 默认标的是 `563360`，可用 `--symbol` 指定另一只 ETF；`--start` 和 `--end`
-使用 `YYYY-MM-DD` 日期。行情 CSV 保存在 `data/cache/`。普通运行仅使用完整
-覆盖请求日期区间的缓存；缓存不存在或范围不足时会失败，不会自动联网。只有
-传入 `--refresh` 才查询行情并更新缓存。输出保存在 `results/`，包含
-`result.json`、`equity.csv` 和 `trades.csv`。可用 `--output-dir` 和
-`--cache-dir` 指定目录。
+使用 `YYYY-MM-DD` 日期。行情 CSV 与复权因子 CSV 保存在 `data/cache/`。普通
+运行只读取本地缓存，不查询行情或因子；若缓存缺失或交易日不完整会失败。
+注意 CLI 在检查缓存前仍会登录 AmazingData。仅传入 `--refresh` 才在登录后
+查询行情并获取因子（SDK 可使用本地因子缓存），随后更新项目 CSV 缓存。输出保存在
+`results/`，包含 `result.json`、`equity.csv` 和 `trades.csv`。可用 `--output-dir`
+和 `--cache-dir` 指定目录。
 
 回测采用 SMA(20/60) 长仓/空仓示例、人民币 100,000 元初始资金、单边
 0.00005 佣金率（每笔成交最低 0.1 元）和默认 `--spread 0.0005`。spread 是
