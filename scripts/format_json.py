@@ -2,6 +2,7 @@
 
 import json
 import sys
+from pathlib import Path
 
 for filename in sys.argv[1:]:
     path = Path(filename)
