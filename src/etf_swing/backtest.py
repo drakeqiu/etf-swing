@@ -63,7 +63,9 @@ class SmaCross(Strategy):
             self.position.close()
 
 
-def run_backtest(data: pd.DataFrame, spread: float = DEFAULT_SPREAD) -> Any:
+def run_backtest(
+    data: pd.DataFrame, spread: float = DEFAULT_SPREAD
+) -> pd.Series:
     """按项目执行假设运行长仓/空仓示例策略。"""
     backtest = Backtest(
         data,
