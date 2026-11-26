@@ -34,6 +34,16 @@ AD_PORT=你的服务端口
 
 不要把真实凭据贴到聊天、提交到 Git 或写进文档。`.env` 已被 Git 忽略。普通缓存回测不登录 AmazingData，也不需要 `.env`；刷新时才会读取这些变量。
 
+### 快速验证 AmazingData 登录
+
+不需要刷新行情或运行回测；在仓库根目录执行：
+
+```sh
+uv run python scripts/check_amazingdata_login.py
+```
+
+脚本读取项目根目录 `.env`，并使用 `AD_USERNAME`、`AD_PASSWORD`、`AD_HOST` 和 `AD_PORT` 登录：当前 shell 环境中已设置的变量优先，未设置的变量从 `.env` 补充。成功会显示 `AmazingData login OK` 并立即登出；失败会显示错误类型和脱敏后的信息，且退出码非零。诊断输出会隐藏配置中的凭据和主机值。
+
 ## 4. 第一次运行：刷新行情并回测
 
 先选好标的和起止日期，然后在项目根目录执行：
