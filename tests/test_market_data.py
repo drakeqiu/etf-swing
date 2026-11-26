@@ -15,7 +15,7 @@ class FakeProvider:
     def __init__(self):
         self.market_calls = 0
 
-    def fetch_bars(self, sdk_code, start, end):
+    def fetch_bars(self, symbol: str, start: date, end: date):
         self.market_calls += 1
         return pd.DataFrame(
             {
@@ -28,7 +28,7 @@ class FakeProvider:
             }
         )
 
-    def fetch_factors(self, sdk_code, start, end):
+    def fetch_factors(self, symbol: str, start: date, end: date):
         self.factor_calls = getattr(self, "factor_calls", 0) + 1
         return pd.DataFrame(
             {"Date": ["2024-01-02", "2024-01-03"], "Factor": [2.0, 4.0]}
@@ -70,7 +70,8 @@ def test_sdk_adapter_filters_exact_codes_and_normalizes_vendor_fields():
     class Base:
         def get_code_list(self, security_type):
             return pd.DataFrame(
-                {"name": ["ETF", "ETF"]}, index=["SH.563360", "SH.588000"]
+                {"name": ["ETF", "ETF"]},
+                index=pd.Index(["SH.563360", "SH.588000"]),
             )
 
         def get_calendar(self):
@@ -122,7 +123,9 @@ def test_sdk_adapter_uses_extra_etf_queries_and_normalizes_results():
     class FakeBaseData:
         def get_code_list(self, security_type):
             assert security_type == "EXTRA_ETF"
-            return pd.DataFrame({"name": ["ETF"]}, index=["SH.563360"])
+            return pd.DataFrame(
+                {"name": ["ETF"]}, index=pd.Index(["SH.563360"])
+            )
 
         def get_backward_factor(self, codes, local_path=None, is_local=True):
             assert codes == ["SH.563360"]
@@ -173,7 +176,7 @@ def test_sdk_adapter_uses_extra_etf_queries_and_normalizes_results():
 
 
 def test_resolves_etf_from_dataframe_index():
-    table = pd.DataFrame({"name": ["ETF"]}, index=["SH.563360"])
+    table = pd.DataFrame({"name": ["ETF"]}, index=pd.Index(["SH.563360"]))
     assert resolve_etf_code("563360", table) == "SH.563360"
 
 
@@ -213,7 +216,7 @@ def test_cache_requires_coverage_and_refresh_is_explicit(tmp_path):
 
 def test_weekend_request_uses_cached_exchange_sessions(tmp_path):
     class WeekendProvider(FakeProvider):
-        def fetch_bars(self, sdk_code, start, end):
+        def fetch_bars(self, symbol: str, start: date, end: date):
             self.market_calls += 1
             return pd.DataFrame(
                 {
@@ -226,7 +229,7 @@ def test_weekend_request_uses_cached_exchange_sessions(tmp_path):
                 }
             )
 
-        def fetch_factors(self, sdk_code, start, end):
+        def fetch_factors(self, symbol: str, start: date, end: date):
             self.factor_calls = getattr(self, "factor_calls", 0) + 1
             return pd.DataFrame({"Date": ["2024-01-05"], "Factor": [1.0]})
 

@@ -6,9 +6,11 @@ import argparse
 import json
 import os
 from datetime import date
+from importlib import import_module
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 
+import pandas as pd
 from dotenv import load_dotenv
 
 from .backtest import (
@@ -27,6 +29,18 @@ from .market_data import (
 )
 
 
+class _Artifacts(TypedDict):
+    symbol: str
+    start: str
+    end: str
+    strategy: dict[str, object]
+    initial_cash: int
+    cost_assumptions: dict[str, object]
+    metrics: dict[str, object]
+    _equity: pd.DataFrame
+    _trades: pd.DataFrame
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="单 ETF 日线 SMA 回测")
     parser.add_argument("--symbol", default="563360")
@@ -41,7 +55,7 @@ def _parser() -> argparse.ArgumentParser:
 
 def _artifacts(
     stats: Any, symbol: str, start: date, end: date, spread: float
-) -> dict[str, object]:
+) -> _Artifacts:
     trades = stats["_trades"]
     equity = stats["_equity_curve"]
     closed = trades[trades["ExitBar"] >= 0]
@@ -94,13 +108,16 @@ def run_cli(
     )
     stats = run_backtest(data, spread=args.spread)
     result = _artifacts(stats, args.symbol, args.start, args.end, args.spread)
-    result.update(data.attrs)
+    metadata = {
+        key: value for key, value in data.attrs.items() if isinstance(key, str)
+    }
     args.output_dir.mkdir(parents=True, exist_ok=True)
     result["_equity"].to_csv(args.output_dir / "equity.csv")
     result["_trades"].to_csv(args.output_dir / "trades.csv", index=False)
-    public = {
+    public: dict[str, object] = {
         key: value for key, value in result.items() if not key.startswith("_")
     }
+    public.update(metadata)
     (args.output_dir / "result.json").write_text(
         json.dumps(public, ensure_ascii=False, indent=2, allow_nan=False)
         + "\n",
@@ -123,7 +140,9 @@ def main(
     if not parsed.refresh:
 
         class CacheOnlyProvider:
-            def fetch_bars(self, symbol: str, start: date, end: date) -> Any:
+            def fetch_bars(
+                self, symbol: str, start: date, end: date
+            ) -> Any:
                 raise AssertionError("cache-only access must not fetch bars")
 
             def fetch_factors(
@@ -141,8 +160,13 @@ def main(
         run_cli(parsed, CacheOnlyProvider())
         return
     load_dotenv(Path(__file__).resolve().parents[2] / ".env")
-    from AmazingData import BaseData, MarketData, login, logout
-    from AmazingData.query_api.market_data import Period
+    amazing_data = import_module("AmazingData")
+    market_data_api = import_module("AmazingData.query_api.market_data")
+    base_data_class = getattr(amazing_data, "BaseData")  # noqa: B009
+    market_data_class = getattr(amazing_data, "MarketData")  # noqa: B009
+    login = getattr(amazing_data, "login")  # noqa: B009
+    logout = getattr(amazing_data, "logout")  # noqa: B009
+    period = getattr(market_data_api, "Period")  # noqa: B009
 
     username = os.environ["AD_USERNAME"]
     password = os.environ["AD_PASSWORD"]
@@ -150,11 +174,11 @@ def main(
     port = int(os.environ["AD_PORT"])
     login(username, password, host, port)
     try:
-        base_data = BaseData()
+        base_data = base_data_class()
         calendar = base_data.get_calendar()
-        market_data = MarketData(calendar)
+        market_data = market_data_class(calendar)
         sdk_provider = AmazingDataProvider.from_sdk(
-            base_data, market_data, period=Period.day.value, calendar=calendar
+            base_data, market_data, period=period.day.value, calendar=calendar
         )
         run_cli(parsed, sdk_provider)
     finally:

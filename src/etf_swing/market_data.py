@@ -16,10 +16,10 @@ class MarketDataProvider(Protocol):
     """行情适配器必须提供的日线、因子与交易日历数据。"""
 
     def fetch_bars(
-        self, sdk_code: str, start: date, end: date
+        self, symbol: str, start: date, end: date
     ) -> pd.DataFrame: ...
     def fetch_factors(
-        self, sdk_code: str, start: date, end: date
+        self, symbol: str, start: date, end: date
     ) -> pd.DataFrame: ...
     def trading_sessions(self, start: date, end: date) -> pd.DatetimeIndex: ...
 
@@ -93,7 +93,7 @@ def _sdk_frame(
         if column.strip().lower() in aliases
     }
     frame = frame.rename(columns=renames)
-    return _dated_frame(frame, required)[required]
+    return _dated_frame(frame, required).loc[:, required]
 
 
 _BAR_ALIASES = {
@@ -109,6 +109,10 @@ _BAR_ALIASES = {
     "vol": "Volume",
 }
 
+def _normalized_datetime_index(values: Any) -> pd.DatetimeIndex:
+    dates = pd.to_datetime(pd.Series(values), errors="raise")
+    return pd.DatetimeIndex(dates.dt.normalize())
+
 
 def _dated_frame(frame: pd.DataFrame, required: list[str]) -> pd.DataFrame:
     result = frame.copy()
@@ -116,7 +120,7 @@ def _dated_frame(frame: pd.DataFrame, required: list[str]) -> pd.DataFrame:
         result = result.set_index("Date")
     if pd.api.types.is_integer_dtype(result.index):
         result.index = result.index.astype(str)
-    result.index = pd.to_datetime(result.index, errors="raise").normalize()
+    result.index = _normalized_datetime_index(result.index)
     result.index.name = "Date"
     missing = set(required).difference(result.columns)
     if missing:
@@ -132,9 +136,7 @@ def adjust_ohlc(bars: pd.DataFrame, factors: pd.Series) -> pd.DataFrame:
     """按因子与区间最新因子之比调整 OHLC，不填充日期。"""
     data = _dated_frame(bars, BAR_COLUMNS)
     factor_series = factors.copy()
-    factor_series.index = pd.to_datetime(
-        factor_series.index, errors="raise"
-    ).normalize()
+    factor_series.index = _normalized_datetime_index(factor_series.index)
     factor_series = factor_series.sort_index()
     if factor_series.index.has_duplicates:
         raise ValueError("Duplicate factor dates are not allowed")
@@ -150,7 +152,7 @@ def adjust_ohlc(bars: pd.DataFrame, factors: pd.Series) -> pd.DataFrame:
     adjusted = data[ohlc_columns].astype(float).mul(ratio, axis=0)
     data = data.astype({column: float for column in ohlc_columns})
     data.loc[:, ohlc_columns] = adjusted
-    return data[BAR_COLUMNS]
+    return data.loc[:, BAR_COLUMNS]
 
 
 class AmazingDataProvider:
@@ -272,7 +274,7 @@ class MarketDataService:
             else:
                 sessions = pd.bdate_range(start, end)
             sessions = (
-                pd.DatetimeIndex(sessions).normalize().unique().sort_values()
+                _normalized_datetime_index(sessions).unique().sort_values()
             )
             coverage_start, coverage_end = (
                 pd.Timestamp(start),
@@ -294,12 +296,20 @@ class MarketDataService:
                 pd.read_csv(factor_path, parse_dates=["Date"]), ["Factor"]
             )
             session_frame = pd.read_csv(sessions_path, parse_dates=["Date"])
-            sessions = pd.DatetimeIndex(session_frame["Date"]).normalize()
+            sessions = _normalized_datetime_index(session_frame["Date"])
             coverage_start = pd.Timestamp(
                 session_frame["coverage_start"].iloc[0]
             )
             coverage_end = pd.Timestamp(session_frame["coverage_end"].iloc[0])
         first, last = pd.Timestamp(start), pd.Timestamp(end)
+        if not isinstance(first, pd.Timestamp) or not isinstance(
+            last, pd.Timestamp
+        ):
+            raise ValueError("Requested interval boundaries must be valid")
+        if not isinstance(coverage_start, pd.Timestamp) or not isinstance(
+            coverage_end, pd.Timestamp
+        ):
+            raise ValueError("Cached coverage boundaries must be valid")
         if first < coverage_start or last > coverage_end:
             raise ValueError(
                 f"Cache does not cover requested interval {start} to {end}"
