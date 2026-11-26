@@ -16,9 +16,9 @@ repos:
         entry: uv run taplo format
         language: system
         types: [toml]
-      - id: json-format
+      - id: prettier
         name: Format JSON
-        entry: uv run python scripts/format_json.py
+        entry: bun run prettier --write
         language: system
         types: [json]
       - id: mdformat

@@ -18,4 +18,4 @@
 git config core.hooksPath .githooks
 ```
 
-提交前会格式化 Python、YAML、TOML、JSON 和 Markdown 文件，再运行 Ruff lint 与 pytest；需要先安装项目开发依赖（`uv sync`）。
+提交前会格式化 Python、YAML、TOML、JSON 和 Markdown 文件，再运行 Ruff lint 与 pytest；需要先安装依赖（`uv sync` 和 `bun install`）。

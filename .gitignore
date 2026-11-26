@@ -19,3 +19,4 @@ results/
 # Local machine files
 .envrc
 *.log
+node_modules/
