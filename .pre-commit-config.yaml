@@ -1,0 +1,28 @@
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-format
+        name: Format Python
+        entry: uv run ruff format
+        language: system
+        types: [python]
+      - id: yamlfix
+        name: Format YAML
+        entry: uv run yamlfix
+        language: system
+        types: [yaml]
+      - id: taplo
+        name: Format TOML
+        entry: uv run taplo format
+        language: system
+        types: [toml]
+      - id: json-format
+        name: Format JSON
+        entry: uv run python scripts/format_json.py
+        language: system
+        types: [json]
+      - id: mdformat
+        name: Format Markdown
+        entry: uv run mdformat
+        language: system
+        types: [markdown]
