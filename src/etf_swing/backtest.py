@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 from backtesting import Backtest, Strategy
@@ -71,7 +71,7 @@ def run_backtest(
         data,
         SmaCross,
         cash=INITIAL_CASH,
-        commission=commission,
+        commission=cast(Any, commission),
         spread=spread,
         exclusive_orders=True,
         finalize_trades=True,
