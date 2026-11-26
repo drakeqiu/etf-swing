@@ -57,9 +57,6 @@ jobs:
       - name: Pyright
         run: uv run pyright
 
-      - name: Mypy
-        run: uv run mypy
-
       - name: YAML lint
         run: uv run yamllint --strict .github
 
