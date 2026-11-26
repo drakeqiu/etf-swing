@@ -26,7 +26,7 @@ AD_PORT=你的服务端口
 不要分享或提交真实凭据。然后执行刷新和回测：
 
 ```sh
-uv run --env-file .env etf-swing \
+uv run etf-swing \
   --symbol 563360 \
   --start 2024-01-01 \
   --end 2025-12-31 \
