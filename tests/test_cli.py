@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import math
 from datetime import date
 from pathlib import Path
@@ -120,6 +121,51 @@ def test_cli_default_spread_and_cache_metadata(tmp_path: Path) -> None:
     assert result["data_coverage_end"] == "2025-09-30"
     assert result["adjustment_reference_date"] == "2025-09-30"
     assert result["cache_status"] == "refreshed"
+
+
+def test_cli_logs_full_cache_coverage_to_stderr(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root_logger = logging.getLogger()
+    monkeypatch.setattr(root_logger, "handlers", [])
+    monkeypatch.setattr(root_logger, "level", logging.WARNING)
+    cache_dir = tmp_path / "cache"
+    output_dir = tmp_path / "results"
+    main(
+        args=[
+            "--start",
+            "2025-01-01",
+            "--end",
+            "2025-09-30",
+            "--refresh",
+            "--cache-dir",
+            str(cache_dir),
+            "--output-dir",
+            str(output_dir),
+        ],
+        provider=SyntheticProvider(),
+    )
+    capsys.readouterr()
+
+    main(
+        args=[
+            "--start",
+            "2025-02-01",
+            "--end",
+            "2025-03-31",
+            "--cache-dir",
+            str(cache_dir),
+            "--output-dir",
+            str(output_dir),
+        ]
+    )
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "cache_coverage=2025-01-01..2025-09-30" in captured.err
+    assert root_logger.handlers == []
+    assert root_logger.level == logging.WARNING
 
 
 def test_cli_exports_null_profit_factor_when_no_trade_loses(

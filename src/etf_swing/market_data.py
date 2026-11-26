@@ -372,6 +372,8 @@ class MarketDataService:
             .date()
             .isoformat(),
             "cache_status": "refreshed" if refresh else "hit",
+            "cache_coverage_start": coverage_start.date().isoformat(),
+            "cache_coverage_end": coverage_end.date().isoformat(),
         }
         result.attrs.update(self.last_metadata)
         return result
