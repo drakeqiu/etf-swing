@@ -9,3 +9,13 @@
 - [快速开始](docs/quickstart.md)：安装项目并完成首次回测。
 - [完整使用指南](docs/user-guide.md)：详解运行步骤、参数、策略、成本和结果。
 
+
+## Git 提交检查
+
+启用仓库自带的提交前检查：
+
+```sh
+git config core.hooksPath .githooks
+```
+
+每次提交会运行 Ruff lint、格式检查和 pytest；需要先安装项目开发依赖（`uv sync`）。
