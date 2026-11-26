@@ -54,11 +54,21 @@ jobs:
       - name: Ruff format check
         run: uv run ruff format --check .
 
-      - name: Pyright
-        run: uv run pyright
-
       - name: Generate backtesting.py stubs
         run: uv run stubgen -p backtesting -o stubs
+
+      - name: Generate AmazingData stubs
+        run: |
+          uv run stubgen \
+            -m AmazingData \
+            -m AmazingData.login.tgw_login \
+            -m AmazingData.query_api.base_data \
+            -m AmazingData.query_api.market_data \
+            -m AmazingData.utils.constant \
+            -o stubs
+
+      - name: Pyright
+        run: uv run pyright
 
       - name: Mypy
         run: uv run mypy

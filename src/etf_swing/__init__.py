@@ -6,9 +6,8 @@ import argparse
 import json
 import os
 from datetime import date
-from importlib import import_module
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import Any, TypedDict, cast
 
 import pandas as pd
 from dotenv import load_dotenv
@@ -158,13 +157,10 @@ def main(
         run_cli(parsed, CacheOnlyProvider())
         return
     load_dotenv(Path(__file__).resolve().parents[2] / ".env")
-    amazing_data = import_module("AmazingData")
-    market_data_api = import_module("AmazingData.query_api.market_data")
-    base_data_class = getattr(amazing_data, "BaseData")  # noqa: B009
-    market_data_class = getattr(amazing_data, "MarketData")  # noqa: B009
-    login = getattr(amazing_data, "login")  # noqa: B009
-    logout = getattr(amazing_data, "logout")  # noqa: B009
-    period = getattr(market_data_api, "Period")  # noqa: B009
+    from AmazingData.login.tgw_login import login, logout
+    from AmazingData.query_api.base_data import BaseData
+    from AmazingData.query_api.market_data import MarketData
+    from AmazingData.utils.constant import Period
 
     username = os.environ["AD_USERNAME"]
     password = os.environ["AD_PASSWORD"]
@@ -172,12 +168,15 @@ def main(
     port = int(os.environ["AD_PORT"])
     login(username, password, host, port)
     try:
-        base_data = base_data_class()
+        base_data = BaseData()
         calendar = base_data.get_calendar()
-        market_data = market_data_class(calendar)
+        market_data = MarketData(calendar)
         sdk_provider = AmazingDataProvider.from_sdk(
-            base_data, market_data, period=period.day.value, calendar=calendar
+            base_data,
+            market_data,
+            period=cast(int, Period.day.value),
+            calendar=calendar,
         )
         run_cli(parsed, sdk_provider)
     finally:
-        logout(username)
+        cast(Any, logout)(username)

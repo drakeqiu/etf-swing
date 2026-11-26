@@ -51,13 +51,14 @@ mypy_path = "$MYPY_CONFIG_FILE_DIR/stubs"
 files = ["src", "tests"]
 
 [[tool.mypy.overrides]]
-module = ["backtesting", "backtesting.*"]
+module = ["backtesting", "backtesting.*", "AmazingData", "AmazingData.*"]
 ignore_errors = true
 
 [tool.pyright]
 include = ["src", "tests", "scripts"]
 pythonVersion = "3.14"
 typeCheckingMode = "standard"
+stubPath = "stubs"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
