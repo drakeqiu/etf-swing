@@ -5,9 +5,10 @@ from __future__ import annotations
 import argparse
 import json
 import os
+from collections.abc import Callable
 from datetime import date
 from pathlib import Path
-from typing import Any, TypedDict, cast
+from typing import Any, TypedDict
 
 import pandas as pd
 from dotenv import load_dotenv
@@ -162,6 +163,10 @@ def main(
     from AmazingData.query_api.market_data import MarketData
     from AmazingData.utils.constant import Period
 
+    # stubgen 把 Enum.value 推断为 Period；SDK 运行时返回 int。
+    period: int = Period.day.value  # type: ignore[assignment]
+    logout_user: Callable[[str], None] = logout
+
     username = os.environ["AD_USERNAME"]
     password = os.environ["AD_PASSWORD"]
     host = os.environ["AD_HOST"]
@@ -174,9 +179,9 @@ def main(
         sdk_provider = AmazingDataProvider.from_sdk(
             base_data,
             market_data,
-            period=cast(int, Period.day.value),
+            period=period,
             calendar=calendar,
         )
         run_cli(parsed, sdk_provider)
     finally:
-        cast(Any, logout)(username)
+        logout_user(username)
