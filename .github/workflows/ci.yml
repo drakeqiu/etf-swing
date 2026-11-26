@@ -64,6 +64,7 @@ jobs:
             -m AmazingData.login.tgw_login \
             -m AmazingData.query_api.base_data \
             -m AmazingData.query_api.market_data \
+            -m AmazingData.utils.constant \
             -o stubs
 
       - name: Pyright

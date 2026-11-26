@@ -5,13 +5,6 @@ build/
 dist/
 wheels/
 stubs/
-!stubs/
-stubs/*
-!stubs/AmazingData/
-stubs/AmazingData/*
-!stubs/AmazingData/utils/
-stubs/AmazingData/utils/*
-!stubs/AmazingData/utils/constant.pyi
 *.egg-info
 
 # Virtual environments
