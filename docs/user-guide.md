@@ -39,7 +39,7 @@ AD_PORT=你的服务端口
 先选好标的和起止日期，然后在项目根目录执行：
 
 ```sh
-uv run --env-file .env etf-swing \
+uv run etf-swing \
   --symbol 563360 \
   --start 2024-01-01 \
   --end 2025-12-31 \

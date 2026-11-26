@@ -9,6 +9,8 @@ from datetime import date
 from pathlib import Path
 from typing import Any
 
+from dotenv import load_dotenv
+
 from .backtest import (
     COMMISSION_RATE,
     DEFAULT_SPREAD,
@@ -138,6 +140,7 @@ def main(
 
         run_cli(parsed, CacheOnlyProvider())
         return
+    load_dotenv(Path(__file__).resolve().parents[2] / ".env")
     from AmazingData import BaseData, MarketData, login, logout
     from AmazingData.query_api.market_data import Period
 
