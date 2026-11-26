@@ -57,6 +57,9 @@ jobs:
       - name: Pyright
         run: uv run pyright
 
+      - name: Generate backtesting.py stubs
+        run: uv run stubgen -p backtesting -o stubs
+
       - name: Mypy
         run: uv run mypy
 

@@ -50,6 +50,10 @@ strict = true
 mypy_path = "$MYPY_CONFIG_FILE_DIR/stubs"
 files = ["src", "tests"]
 
+[[tool.mypy.overrides]]
+module = ["backtesting", "backtesting.*"]
+ignore_errors = true
+
 [tool.pyright]
 include = ["src", "tests", "scripts"]
 pythonVersion = "3.14"
