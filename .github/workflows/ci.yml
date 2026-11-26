@@ -1,33 +1,27 @@
 ---
 name: CI
-
-"on":
+on:
   push:
     branches: [main]
   pull_request:
   workflow_dispatch:
-
 permissions:
   contents: read
-
 concurrency:
   group: >-
     ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
-
 jobs:
   quality:
-    name: Python quality checks
+    name: Quality checks
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
         uses: actions/checkout@v6
-
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.14"
-
+          python-version: '3.14'
       - name: Download supplier wheels
         env:
           GH_TOKEN: ${{ github.token }}
@@ -38,25 +32,23 @@ jobs:
             --pattern "*.whl" \
             --dir wheels
           ls -lh wheels/
-
       - name: Set up uv
         uses: astral-sh/setup-uv@v7
         with:
           enable-cache: true
           cache-dependency-glob: uv.lock
-
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+      - name: Install locked Bun dependencies
+        run: bun install --frozen-lockfile
       - name: Install locked Python dependencies
         run: uv sync --locked
-
       - name: Ruff lint
         run: uv run ruff check .
-
       - name: Ruff format check
         run: uv run ruff format --check .
-
       - name: Generate backtesting.py stubs
         run: uv run stubgen -p backtesting -o stubs
-
       - name: Generate AmazingData stubs
         run: |
           uv run stubgen \
@@ -66,15 +58,27 @@ jobs:
             -m AmazingData.query_api.market_data \
             -m AmazingData.utils.constant \
             -o stubs
-
       - name: Pyright
         run: uv run pyright
-
       - name: Mypy
         run: uv run mypy
-
       - name: YAML lint
-        run: uv run yamllint --strict .github
-
+        run: |
+          uv run yamllint --strict \
+            --config-data \
+            '{extends: default, rules: {truthy: {check-keys: false}}}' \
+            .github
+      - name: Markdown format check
+        run: git ls-files -z -- '*.md' | xargs -0 -r uv run mdformat --check
+      - name: JSON format check
+        run: git ls-files -z -- '*.json' | xargs -0 -r bun run prettier --check
+      - name: YAML format check
+        run: |
+          git ls-files -z -- '*.yaml' '*.yml' \
+            | xargs -0 -r uv run yamlfix --check
+      - name: TOML format check
+        run: |
+          git ls-files -z -- '*.toml' \
+            | xargs -0 -r uv run taplo format --check
       - name: Tests
         run: uv run pytest
