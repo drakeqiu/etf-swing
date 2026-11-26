@@ -3,8 +3,10 @@ from __future__ import annotations
 import json
 import math
 from datetime import date
+from pathlib import Path
 
 import pandas as pd
+import pytest
 from synthetic_data import synthetic_data
 
 from etf_swing import _parser, main
@@ -31,7 +33,9 @@ class SyntheticProvider:
         )
 
 
-def test_cli_exports_consistent_offline_run(tmp_path, monkeypatch) -> None:
+def test_cli_exports_consistent_offline_run(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     args = [
         "--start",
         "2025-01-01",
@@ -94,7 +98,7 @@ def test_cli_exports_consistent_offline_run(tmp_path, monkeypatch) -> None:
     assert cached["cache_status"] == "hit"
 
 
-def test_cli_default_spread_and_cache_metadata(tmp_path) -> None:
+def test_cli_default_spread_and_cache_metadata(tmp_path: Path) -> None:
     assert _parser().get_default("spread") == 0.0005
     main(
         args=[
@@ -118,9 +122,11 @@ def test_cli_default_spread_and_cache_metadata(tmp_path) -> None:
     assert result["cache_status"] == "refreshed"
 
 
-def test_cli_exports_null_profit_factor_when_no_trade_loses(tmp_path) -> None:
+def test_cli_exports_null_profit_factor_when_no_trade_loses(
+    tmp_path: Path,
+) -> None:
     class RisingProvider(SyntheticProvider):
-        def __init__(self):
+        def __init__(self) -> None:
             close = list(range(100, 500))
             self.bars = pd.DataFrame(
                 {

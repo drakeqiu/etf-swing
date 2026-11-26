@@ -1,4 +1,5 @@
 from datetime import date
+from pathlib import Path
 
 import pandas as pd
 import pytest
@@ -12,10 +13,10 @@ from etf_swing.market_data import (
 
 
 class FakeProvider:
-    def __init__(self):
+    def __init__(self) -> None:
         self.market_calls = 0
 
-    def fetch_bars(self, symbol: str, start: date, end: date):
+    def fetch_bars(self, symbol: str, start: date, end: date) -> pd.DataFrame:
         self.market_calls += 1
         return pd.DataFrame(
             {
@@ -28,17 +29,19 @@ class FakeProvider:
             }
         )
 
-    def fetch_factors(self, symbol: str, start: date, end: date):
+    def fetch_factors(
+        self, symbol: str, start: date, end: date
+    ) -> pd.DataFrame:
         self.factor_calls = getattr(self, "factor_calls", 0) + 1
         return pd.DataFrame(
             {"Date": ["2024-01-02", "2024-01-03"], "Factor": [2.0, 4.0]}
         )
 
-    def trading_sessions(self, start, end):
+    def trading_sessions(self, start: date, end: date) -> pd.DatetimeIndex:
         return pd.DatetimeIndex(["2024-01-02", "2024-01-03"])
 
 
-def test_adjustment_scales_every_ohlc_field_and_preserves_volume():
+def test_adjustment_scales_every_ohlc_field_and_preserves_volume() -> None:
     bars = pd.DataFrame(
         {
             "Open": [10.0, 11.0],
@@ -66,25 +69,38 @@ def test_adjustment_scales_every_ohlc_field_and_preserves_volume():
     }
 
 
-def test_sdk_adapter_filters_exact_codes_and_normalizes_vendor_fields():
+def test_sdk_adapter_filters_exact_codes_and_normalizes_vendor_fields() -> (
+    None
+):
     class Base:
-        def get_code_list(self, security_type):
+        def get_code_list(self, security_type: str) -> pd.DataFrame:
             return pd.DataFrame(
                 {"name": ["ETF", "ETF"]},
                 index=pd.Index(["SH.563360", "SH.588000"]),
             )
 
-        def get_calendar(self):
+        def get_calendar(self) -> list[int]:
             return [20240102]
 
-        def get_backward_factor(self, codes, local_path=None, is_local=True):
+        def get_backward_factor(
+            self,
+            codes: list[str],
+            local_path: str | None = None,
+            is_local: bool = True,
+        ) -> pd.DataFrame:
             assert codes == ["SH.563360"]
             return pd.DataFrame(
                 {"SH.563360": [2.0]}, index=pd.to_datetime(["2024-01-02"])
             )
 
     class Market:
-        def query_kline(self, codes, begin_date, end_date, period):
+        def query_kline(
+            self,
+            codes: list[str],
+            begin_date: int,
+            end_date: int,
+            period: int,
+        ) -> pd.DataFrame:
             return pd.DataFrame(
                 {
                     "kline_time": ["2024-01-02"],
@@ -106,12 +122,17 @@ def test_sdk_adapter_filters_exact_codes_and_normalizes_vendor_fields():
     assert list(factors.Factor) == [2]
 
 
-def test_resolves_etf_and_adapter_queries_sdk_code():
-    queried = []
+def test_resolves_etf_and_adapter_queries_sdk_code() -> None:
+    queried: list[str] = []
+
+    def query(code: str, start: date, end: date) -> pd.DataFrame:
+        queried.append(code)
+        return pd.DataFrame()
+
     adapter = AmazingDataProvider(
         {"563360.SH": "ETF"},
-        lambda code, start, end: queried.append(code) or pd.DataFrame(),
-        lambda code, start, end: queried.append(code) or pd.DataFrame(),
+        query,
+        query,
     )
     assert resolve_etf_code("563360", adapter.code_table) == "563360.SH"
     adapter.fetch_bars("563360", date(2024, 1, 2), date(2024, 1, 3))
@@ -119,26 +140,37 @@ def test_resolves_etf_and_adapter_queries_sdk_code():
     assert queried == ["563360.SH", "563360.SH"]
 
 
-def test_sdk_adapter_uses_extra_etf_queries_and_normalizes_results():
+def test_sdk_adapter_uses_extra_etf_queries_and_normalizes_results() -> None:
     class FakeBaseData:
-        def get_code_list(self, security_type):
+        def get_code_list(self, security_type: str) -> pd.DataFrame:
             assert security_type == "EXTRA_ETF"
             return pd.DataFrame(
                 {"name": ["ETF"]}, index=pd.Index(["SH.563360"])
             )
 
-        def get_backward_factor(self, codes, local_path=None, is_local=True):
+        def get_backward_factor(
+            self,
+            codes: list[str],
+            local_path: str | None = None,
+            is_local: bool = True,
+        ) -> pd.DataFrame:
             assert codes == ["SH.563360"]
             return pd.DataFrame(
                 {"SH.563360": [2.0, 4.0]},
                 index=pd.to_datetime(["2024-01-02", "2024-01-03"]),
             )
 
-        def get_calendar(self):
+        def get_calendar(self) -> list[int]:
             return [20240102, 20240103]
 
     class FakeMarketData:
-        def query_kline(self, codes, begin_date, end_date, period):
+        def query_kline(
+            self,
+            codes: list[str],
+            begin_date: int,
+            end_date: int,
+            period: int,
+        ) -> pd.DataFrame:
             assert codes == ["SH.563360"]
             assert (begin_date, end_date, period) == (
                 20240102,
@@ -175,12 +207,14 @@ def test_sdk_adapter_uses_extra_etf_queries_and_normalizes_results():
     ).tolist() == list(pd.to_datetime(["2024-01-02", "2024-01-03"]))
 
 
-def test_resolves_etf_from_dataframe_index():
+def test_resolves_etf_from_dataframe_index() -> None:
     table = pd.DataFrame({"name": ["ETF"]}, index=pd.Index(["SH.563360"]))
     assert resolve_etf_code("563360", table) == "SH.563360"
 
 
-def test_cache_requires_coverage_and_refresh_is_explicit(tmp_path):
+def test_cache_requires_coverage_and_refresh_is_explicit(
+    tmp_path: Path,
+) -> None:
     provider = FakeProvider()
     service = MarketDataService(provider, tmp_path)
     with pytest.raises(FileNotFoundError):
@@ -214,9 +248,11 @@ def test_cache_requires_coverage_and_refresh_is_explicit(tmp_path):
         service.load("563360", date(2024, 1, 1), date(2024, 1, 3))
 
 
-def test_weekend_request_uses_cached_exchange_sessions(tmp_path):
+def test_weekend_request_uses_cached_exchange_sessions(tmp_path: Path) -> None:
     class WeekendProvider(FakeProvider):
-        def fetch_bars(self, symbol: str, start: date, end: date):
+        def fetch_bars(
+            self, symbol: str, start: date, end: date
+        ) -> pd.DataFrame:
             self.market_calls += 1
             return pd.DataFrame(
                 {
@@ -229,11 +265,13 @@ def test_weekend_request_uses_cached_exchange_sessions(tmp_path):
                 }
             )
 
-        def fetch_factors(self, symbol: str, start: date, end: date):
+        def fetch_factors(
+            self, symbol: str, start: date, end: date
+        ) -> pd.DataFrame:
             self.factor_calls = getattr(self, "factor_calls", 0) + 1
             return pd.DataFrame({"Date": ["2024-01-05"], "Factor": [1.0]})
 
-        def trading_sessions(self, start, end):
+        def trading_sessions(self, start: date, end: date) -> pd.DatetimeIndex:
             return pd.DatetimeIndex(["2024-01-05"])
 
     provider = WeekendProvider()
@@ -249,7 +287,7 @@ def test_weekend_request_uses_cached_exchange_sessions(tmp_path):
     assert provider.factor_calls == 1
 
 
-def test_adjustment_rejects_missing_and_misaligned_factors():
+def test_adjustment_rejects_missing_and_misaligned_factors() -> None:
     bars = pd.DataFrame(
         {"Open": [2], "High": [4], "Low": [1], "Close": [3], "Volume": [5]},
         index=pd.to_datetime(["2024-01-02"]),
