@@ -1,0 +1,6 @@
+#!/bin/sh
+set -eu
+
+uv run pre-commit run --config .pre-commit-config.yaml
+uv run ruff check .
+uv run pytest
