@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import logging
 import os
+import sys
 from collections.abc import Callable
 from datetime import date
 from pathlib import Path
@@ -27,6 +29,19 @@ from .market_data import (
     MarketDataProvider,
     MarketDataService,
 )
+
+logger = logging.getLogger(f"{__name__}.cli")
+
+
+def _configure_logging() -> None:
+    logger.handlers.clear()
+    handler = logging.StreamHandler(sys.stderr)
+    handler.setFormatter(
+        logging.Formatter("%(asctime)s %(levelname)s %(message)s")
+    )
+    logger.addHandler(handler)
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
 
 
 class _Artifacts(TypedDict):
@@ -103,14 +118,38 @@ def run_cli(
     args: argparse.Namespace, provider: MarketDataProvider
 ) -> dict[str, object]:
     """通过注入数据提供器运行，不初始化 SDK。"""
+    logger.info(
+        "开始加载行情 symbol=%s start=%s end=%s refresh=%s",
+        args.symbol,
+        args.start,
+        args.end,
+        args.refresh,
+    )
     data = MarketDataService(provider, args.cache_dir).load(
         args.symbol, args.start, args.end, refresh=args.refresh
     )
+    logger.info(
+        "行情加载完成 symbol=%s cache_status=%s cache_coverage=%s..%s",
+        args.symbol,
+        data.attrs.get("cache_status"),
+        data.attrs.get("cache_coverage_start"),
+        data.attrs.get("cache_coverage_end"),
+    )
+    logger.info("开始回测 symbol=%s", args.symbol)
     stats = run_backtest(data, spread=args.spread)
     result = _artifacts(stats, args.symbol, args.start, args.end, args.spread)
+    logger.info(
+        "回测完成 symbol=%s trade_count=%s",
+        args.symbol,
+        result["metrics"]["trade_count"],
+    )
     metadata = {
-        key: value for key, value in data.attrs.items() if isinstance(key, str)
+        key: value
+        for key, value in data.attrs.items()
+        if isinstance(key, str)
+        and key not in ("cache_coverage_start", "cache_coverage_end")
     }
+    logger.info("开始导出结果 output_dir=%s", args.output_dir)
     args.output_dir.mkdir(parents=True, exist_ok=True)
     result["_equity"].to_csv(args.output_dir / "equity.csv")
     result["_trades"].to_csv(args.output_dir / "trades.csv", index=False)
@@ -123,6 +162,7 @@ def run_cli(
         + "\n",
         encoding="utf-8",
     )
+    logger.info("结果导出完成 output_dir=%s", args.output_dir)
     return public
 
 
@@ -134,6 +174,15 @@ def main(
     parsed = _parser().parse_args(args)
     if parsed.start > parsed.end:
         raise SystemExit("--start must not be after --end")
+    _configure_logging()
+    logger.info(
+        "启动回测 symbol=%s start=%s end=%s refresh=%s",
+        parsed.symbol,
+        parsed.start,
+        parsed.end,
+        parsed.refresh,
+    )
+
     if provider is not None:
         run_cli(parsed, provider)
         return
@@ -173,8 +222,11 @@ def main(
     password = os.environ["AD_PASSWORD"]
     host = os.environ["AD_HOST"]
     port = int(os.environ["AD_PORT"])
+    logger.info("登录行情 SDK")
     login(username, password, host, port)
+    logger.info("行情 SDK 登录成功")
     try:
+        logger.info("初始化行情 SDK 数据接口")
         base_data = BaseData()
         calendar = base_data.get_calendar()
         market_data = MarketData(calendar)
@@ -184,6 +236,7 @@ def main(
             period=period,
             calendar=calendar,
         )
+        logger.info("行情 SDK 数据接口初始化完成")
         run_cli(parsed, sdk_provider)
     finally:
         logout_user(username)
