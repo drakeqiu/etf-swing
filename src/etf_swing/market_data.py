@@ -109,6 +109,7 @@ _BAR_ALIASES = {
     "vol": "Volume",
 }
 
+
 def _normalized_datetime_index(values: Any) -> pd.DatetimeIndex:
     dates = pd.to_datetime(pd.Series(values), errors="raise")
     return pd.DatetimeIndex(dates.dt.normalize())

@@ -140,9 +140,7 @@ def main(
     if not parsed.refresh:
 
         class CacheOnlyProvider:
-            def fetch_bars(
-                self, symbol: str, start: date, end: date
-            ) -> Any:
+            def fetch_bars(self, symbol: str, start: date, end: date) -> Any:
                 raise AssertionError("cache-only access must not fetch bars")
 
             def fetch_factors(

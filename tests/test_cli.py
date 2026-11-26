@@ -26,9 +26,7 @@ class SyntheticProvider:
         sessions = self.bars.index
         return pd.DatetimeIndex(
             sessions[
-                sessions.slice_indexer(
-                    pd.Timestamp(start), pd.Timestamp(end)
-                )
+                sessions.slice_indexer(pd.Timestamp(start), pd.Timestamp(end))
             ]
         )
 
