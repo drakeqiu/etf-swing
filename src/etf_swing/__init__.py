@@ -152,9 +152,7 @@ def main(
                     "cache-only access must not fetch factors"
                 )
 
-            def trading_sessions(
-                self, start: date, end: date
-            ) -> NoReturn:
+            def trading_sessions(self, start: date, end: date) -> NoReturn:
                 raise AssertionError(
                     "cache-only access must not query calendar"
                 )
