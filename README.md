@@ -9,12 +9,13 @@
 - [快速开始](docs/quickstart.md)：安装项目并完成首次回测。
 - [完整使用指南](docs/user-guide.md)：详解运行步骤、参数、策略、成本和结果。
 
-## Git 提交检查
+## Git 提交规范
 
-启用仓库自带的提交前检查：
+在仓库根目录启用提交检查和提交模板：
 
 ```sh
 git config core.hooksPath .githooks
+git config commit.template "$(git rev-parse --show-toplevel)/.gitmessage"
 ```
 
-提交前会格式化 Python、YAML、TOML、JSON 和 Markdown 文件，再运行 Ruff lint 与 pytest；需要先安装依赖（`uv sync` 和 `bun install`）。
+提交消息首行使用 `type(scope): subject`，`scope` 可省略。提交钩子校验格式；模板列出允许的类型和示例。提交前仍会格式化暂存文件，再运行 Ruff lint 与 pytest。依赖安装：`uv sync`、`bun install`。

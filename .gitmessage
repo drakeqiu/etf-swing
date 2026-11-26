@@ -1,0 +1,5 @@
+# 格式：<type>(<scope>): <subject>；scope 可省略。
+# type：feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert
+# 示例：feat(cli): 增加历史回测命令
+#
+# 首行简明说明改动；后续可补充背景、方案与影响。
