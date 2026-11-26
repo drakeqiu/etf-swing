@@ -10,11 +10,7 @@ jobs:
     name: Delete merged branch
     if: >-
       github.event.pull_request.merged == true &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.head.ref !=
-      github.event.pull_request.base.ref &&
-      github.event.pull_request.head.ref !=
-      github.event.repository.default_branch
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -25,7 +21,14 @@ jobs:
         env:
           HEAD_REF: ${{ github.event.pull_request.head.ref }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          DEFAULT_REF: ${{ github.event.repository.default_branch }}
         run: |-
+          if [[ "$HEAD_REF" == "$BASE_REF" ||
+                "$HEAD_REF" == "$DEFAULT_REF" ]]; then
+            echo "Head branch is the base or default; leaving it untouched."
+            exit 0
+          fi
           ref="refs/heads/${HEAD_REF}"
           lease="${ref}:${HEAD_SHA}"
           if git push origin --force-with-lease="$lease" ":${ref}"; then
@@ -33,8 +36,14 @@ jobs:
             exit 0
           fi
           current="$(git ls-remote --heads origin "$ref")"
-          current_sha="${current%%$'\t'*}"
-          if [[ -z "$current" || "$current_sha" != "$HEAD_SHA" ]]; then
+          current_sha=""
+          while IFS=$'\t' read -r sha remote_ref; do
+            if [[ "$remote_ref" == "$ref" ]]; then
+              current_sha="$sha"
+              break
+            fi
+          done <<< "$current"
+          if [[ -z "$current_sha" || "$current_sha" != "$HEAD_SHA" ]]; then
             echo "Head branch is absent or advanced; leaving it untouched."
             exit 0
           fi
