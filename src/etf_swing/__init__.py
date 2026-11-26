@@ -163,10 +163,8 @@ def main(
     from AmazingData.query_api.market_data import MarketData
     from AmazingData.utils.constant import Period
 
-    period_value: object = Period.day.value
-    if not isinstance(period_value, int):
-        raise TypeError("AmazingData Period.day.value must be an int")
-    period = period_value
+    # stubgen 把 Enum.value 推断为 Period；SDK 运行时返回 int。
+    period: int = Period.day.value  # type: ignore[assignment]
     logout_user: Callable[[str], None] = logout
 
     username = os.environ["AD_USERNAME"]
