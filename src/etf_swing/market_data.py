@@ -2,12 +2,38 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from datetime import date
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Protocol
 
 import pandas as pd
+
+type CodeTable = Mapping[object, object] | pd.DataFrame | Iterable[object]
+type CalendarData = pd.DataFrame | pd.Series | pd.Index | Sequence[object]
+
+
+class _AmazingBaseData(Protocol):
+    def get_code_list(self, *, security_type: str) -> CodeTable: ...
+
+    def get_calendar(self) -> CalendarData: ...
+
+    def get_backward_factor(
+        self, codes: list[str], /, *, is_local: bool
+    ) -> object: ...
+
+
+class _AmazingMarketData(Protocol):
+    def query_kline(
+        self,
+        codes: list[str],
+        /,
+        *,
+        begin_date: int,
+        end_date: int,
+        period: int,
+    ) -> object: ...
+
 
 BAR_COLUMNS = ["Open", "High", "Low", "Close", "Volume"]
 
@@ -29,13 +55,13 @@ def _code_tokens(value: object) -> set[str]:
     return {part for part in parts if part}
 
 
-def resolve_etf_code(symbol: str, code_table: Any) -> str:
+def resolve_etf_code(symbol: str, code_table: CodeTable) -> str:
     """依据 AmazingData 的 EXTRA_ETF 代码表解析 ETF 代码。"""
     parts = str(symbol).replace("_", ".").replace("-", ".").split(".")
     target = next((part for part in reversed(parts) if part.isdigit()), symbol)
 
     values: Iterable[object]
-    if isinstance(code_table, dict):
+    if isinstance(code_table, Mapping):
         values = code_table.keys()
     elif isinstance(code_table, pd.DataFrame):
         values = [
@@ -111,7 +137,7 @@ _BAR_ALIASES = {
 }
 
 
-def _normalized_datetime_index(values: Any) -> pd.DatetimeIndex:
+def _normalized_datetime_index(values: Iterable[object]) -> pd.DatetimeIndex:
     dates = pd.to_datetime(pd.Series(values), errors="raise")
     return pd.DatetimeIndex(dates.dt.normalize())
 
@@ -162,10 +188,10 @@ class AmazingDataProvider:
 
     def __init__(
         self,
-        code_table: Any,
+        code_table: CodeTable,
         bars_query: Callable[[str, date, date], pd.DataFrame],
         factors_query: Callable[[str, date, date], pd.DataFrame],
-        calendar: Any = None,
+        calendar: CalendarData | None = None,
     ):
         """保存代码表与三类数据查询回调。"""
         self.code_table = code_table
@@ -176,11 +202,11 @@ class AmazingDataProvider:
     @classmethod
     def from_sdk(
         cls,
-        base_data: Any,
-        market_data: Any,
+        base_data: _AmazingBaseData,
+        market_data: _AmazingMarketData,
         *,
         period: int,
-        calendar: Any = None,
+        calendar: CalendarData | None = None,
     ) -> AmazingDataProvider:
         """使用 AmazingData 客户端构建数据提供器。"""
         code_table = base_data.get_code_list(security_type="EXTRA_ETF")

@@ -8,7 +8,7 @@ import os
 from collections.abc import Callable
 from datetime import date
 from pathlib import Path
-from typing import Any, TypedDict
+from typing import NoReturn, TypedDict
 
 import pandas as pd
 from dotenv import load_dotenv
@@ -54,7 +54,7 @@ def _parser() -> argparse.ArgumentParser:
 
 
 def _artifacts(
-    stats: Any, symbol: str, start: date, end: date, spread: float
+    stats: pd.Series, symbol: str, start: date, end: date, spread: float
 ) -> _Artifacts:
     trades = stats["_trades"]
     equity = stats["_equity_curve"]
@@ -140,17 +140,21 @@ def main(
     if not parsed.refresh:
 
         class CacheOnlyProvider:
-            def fetch_bars(self, symbol: str, start: date, end: date) -> Any:
+            def fetch_bars(
+                self, symbol: str, start: date, end: date
+            ) -> NoReturn:
                 raise AssertionError("cache-only access must not fetch bars")
 
             def fetch_factors(
                 self, symbol: str, start: date, end: date
-            ) -> Any:
+            ) -> NoReturn:
                 raise AssertionError(
                     "cache-only access must not fetch factors"
                 )
 
-            def trading_sessions(self, start: date, end: date) -> Any:
+            def trading_sessions(
+                self, start: date, end: date
+            ) -> NoReturn:
                 raise AssertionError(
                     "cache-only access must not query calendar"
                 )

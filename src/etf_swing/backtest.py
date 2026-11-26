@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING
 
 import numpy as np
 from backtesting import Backtest, Strategy
@@ -63,13 +63,15 @@ class SmaCross(Strategy):
             self.position.close()
 
 
-def run_backtest(data: pd.DataFrame, spread: float = DEFAULT_SPREAD) -> Any:
+def run_backtest(
+    data: pd.DataFrame, spread: float = DEFAULT_SPREAD
+) -> pd.Series:
     """按项目执行假设运行长仓/空仓示例策略。"""
     backtest = Backtest(
         data,
         SmaCross,
         cash=INITIAL_CASH,
-        commission=cast(Any, commission),
+        commission=commission,
         spread=spread,
         exclusive_orders=True,
         finalize_trades=True,
