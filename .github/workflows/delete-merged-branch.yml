@@ -1,0 +1,42 @@
+---
+name: Delete merged branch
+on:
+  pull_request:
+    types: [closed]
+permissions:
+  contents: write
+jobs:
+  delete-merged-branch:
+    name: Delete merged branch
+    if: >-
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref !=
+      github.event.pull_request.base.ref &&
+      github.event.pull_request.head.ref !=
+      github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+      - name: Delete head branch
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |-
+          ref="refs/heads/${HEAD_REF}"
+          lease="${ref}:${HEAD_SHA}"
+          if git push origin --force-with-lease="$lease" ":${ref}"; then
+            echo "Deleted ${ref} at ${HEAD_SHA}."
+            exit 0
+          fi
+          current="$(git ls-remote --heads origin "$ref")"
+          current_sha="${current%%$'\t'*}"
+          if [[ -z "$current" || "$current_sha" != "$HEAD_SHA" ]]; then
+            echo "Head branch is absent or advanced; leaving it untouched."
+            exit 0
+          fi
+          echo "Failed to delete unchanged head branch." >&2
+          exit 1
