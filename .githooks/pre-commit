@@ -1,6 +1,22 @@
 #!/bin/sh
 set -eu
 
+format_staged() {
+    pattern=$1
+    shift
+    git diff --cached --name-only --diff-filter=ACMR -z -- "$pattern" |
+        xargs -0 -r "$@"
+    git diff --cached --name-only --diff-filter=ACMR -z -- "$pattern" |
+        xargs -0 -r git add --
+}
+
+format_staged '*.py' uv run ruff format
+format_staged '*.pyi' uv run ruff format
+format_staged '*.yml' uv run yamlfix
+format_staged '*.yaml' uv run yamlfix
+format_staged '*.toml' uv run taplo format
+format_staged '*.json' uv run python scripts/format_json.py
+format_staged '*.md' uv run mdformat
+
 uv run ruff check .
-uv run ruff format --check .
 uv run pytest

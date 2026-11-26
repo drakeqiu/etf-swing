@@ -18,4 +18,4 @@
 git config core.hooksPath .githooks
 ```
 
-每次提交会运行 Ruff lint、格式检查和 pytest；需要先安装项目开发依赖（`uv sync`）。
+提交前会格式化 Python、YAML、TOML、JSON 和 Markdown 文件，再运行 Ruff lint 与 pytest；需要先安装项目开发依赖（`uv sync`）。
