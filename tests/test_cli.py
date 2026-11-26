@@ -24,9 +24,13 @@ class SyntheticProvider:
 
     def trading_sessions(self, start: date, end: date) -> pd.DatetimeIndex:
         sessions = self.bars.index
-        return sessions[
-            (sessions >= pd.Timestamp(start)) & (sessions <= pd.Timestamp(end))
-        ]
+        return pd.DatetimeIndex(
+            sessions[
+                sessions.slice_indexer(
+                    pd.Timestamp(start), pd.Timestamp(end)
+                )
+            ]
+        )
 
 
 def test_cli_exports_consistent_offline_run(tmp_path, monkeypatch) -> None:

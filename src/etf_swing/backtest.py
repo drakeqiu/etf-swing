@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, cast
 
 import numpy as np
 from backtesting import Backtest, Strategy
@@ -25,7 +25,7 @@ def commission(size: float, price: float) -> float:
     return max(abs(size) * price * COMMISSION_RATE, MIN_COMMISSION)
 
 
-def sma(values: object, period: int) -> object:
+def sma(values: np.ndarray, period: int) -> np.ndarray:
     """计算 backtesting.py 所需的移动平均序列。"""
     result = np.full(len(values), np.nan)
     for index in range(period - 1, len(values)):
@@ -69,8 +69,9 @@ def run_backtest(data: pd.DataFrame, spread: float = DEFAULT_SPREAD) -> Any:
         data,
         SmaCross,
         cash=INITIAL_CASH,
-        commission=commission,
+        commission=cast(Any, commission),
         spread=spread,
         exclusive_orders=True,
+        finalize_trades=True,
     )
     return backtest.run(spread=spread)
