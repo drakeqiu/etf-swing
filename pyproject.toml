@@ -48,7 +48,7 @@ python_version = "3.14"
 strict = true
 files = ["src", "tests"]
 
-[tool.basedpyright]
+[tool.pyright]
 include = ["src", "tests", "scripts"]
 pythonVersion = "3.14"
 typeCheckingMode = "standard"

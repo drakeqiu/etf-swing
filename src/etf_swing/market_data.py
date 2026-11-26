@@ -316,8 +316,9 @@ class MarketDataService:
             )
         selected = bars.loc[first:last, BAR_COLUMNS]
         expected = sessions[(sessions >= first) & (sessions <= last)]
-        missing = expected.difference(selected.index)
-        unexpected = selected.index.difference(expected)
+        selected_index = pd.DatetimeIndex(selected.index)
+        missing = expected.difference(selected_index)
+        unexpected = selected_index.difference(expected)
         if selected.empty or expected.empty or len(missing) or len(unexpected):
             raise ValueError(
                 "Cached bars do not cover requested trading sessions: "
