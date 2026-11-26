@@ -42,7 +42,7 @@ AD_PORT=你的服务端口
 uv run python scripts/check_amazingdata_login.py
 ```
 
-脚本读取项目根目录 `.env` 中的 `AD_USERNAME`、`AD_PASSWORD`、`AD_HOST` 和 `AD_PORT`，尝试登录后立即登出。成功会显示 `AmazingData login OK`；失败会显示错误类型和信息，且退出码非零。诊断输出会隐藏配置中的凭据和主机值。
+脚本读取项目根目录 `.env`，并使用 `AD_USERNAME`、`AD_PASSWORD`、`AD_HOST` 和 `AD_PORT` 登录：当前 shell 环境中已设置的变量优先，未设置的变量从 `.env` 补充。成功会显示 `AmazingData login OK` 并立即登出；失败会显示错误类型和脱敏后的信息，且退出码非零。诊断输出会隐藏配置中的凭据和主机值。
 
 ## 4. 第一次运行：刷新行情并回测
 
