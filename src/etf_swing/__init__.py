@@ -67,7 +67,7 @@ def _artifacts(
     gains = closed.loc[closed["PnL"] > 0, "PnL"].sum()
     losses = -closed.loc[closed["PnL"] < 0, "PnL"].sum()
     profit_factor = float(gains / losses) if losses else None
-    metrics = {
+    metrics: dict[str, object] = {
         "total_return": float(stats["Return [%]"]) / 100,
         "profit_factor": float(profit_factor)
         if profit_factor is not None

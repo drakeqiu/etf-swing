@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from datetime import date
 from pathlib import Path
 from typing import Any, Protocol
@@ -34,6 +34,7 @@ def resolve_etf_code(symbol: str, code_table: Any) -> str:
     parts = str(symbol).replace("_", ".").replace("-", ".").split(".")
     target = next((part for part in reversed(parts) if part.isdigit()), symbol)
 
+    values: Iterable[object]
     if isinstance(code_table, dict):
         values = code_table.keys()
     elif isinstance(code_table, pd.DataFrame):
