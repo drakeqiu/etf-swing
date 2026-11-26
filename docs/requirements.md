@@ -9,7 +9,7 @@
 ### 目标
 
 - 使用现有 `uv` 项目与 Python 3.14 环境管理依赖。
-- 按 PEP 8 风格编写代码；使用 Ruff lint/format、pytest、mypy 和 basedpyright。
+- 按 PEP 8 风格编写代码；使用 Ruff lint/format、pytest、mypy 和 pyright。
 - 使用 AmazingData SDK 获取 ETF 日线行情和前复权因子。
 - 使用 `backtesting.py` 对单只 ETF 执行日线回测。
 - 本地缓存 K 线 CSV，允许显式刷新；不在普通读取时隐式绕过缓存。
@@ -29,7 +29,7 @@ SMA 示例策略只用于验证端到端数据与回测管线，不代表已经�
 
 ### 3.1 项目与命令行
 
-- 保留仓库现有 `uv init` 结构和已配置的 AmazingData、`tgw` 本地 wheel、basedpyright 等依赖配置。
+- 保留仓库现有 `uv init` 结构和已配置的 AmazingData、`tgw` 本地 wheel、pyright 等依赖配置。
 - 项目提供命令行入口；刷新行情时自动从项目根目录 `.env` 加载登录信息，不要求调用者指定 env-file。
 - 认证只在命令启动时由 AmazingData SDK 完成；单元测试不读取凭据、不登录、不访问网络。
 - `.env` 属于本机秘密配置，必须纳入 Git 忽略规则，文档不得记录真实凭据。
@@ -68,7 +68,7 @@ SMA 示例策略只用于验证端到端数据与回测管线，不代表已经�
 
 - 所有项目文档使用中文。
 - 代码遵循 PEP 8，行宽沿用现有 Ruff 79 字符配置。
-- `ruff check`、`ruff format --check`、pytest、mypy、basedpyright 应能覆盖项目源码与测试。
+- `ruff check`、`ruff format --check`、pytest、mypy、pyright 应能覆盖项目源码与测试。
 - 数据变换和回测逻辑应与真实 SDK 登录/网络隔离，便于确定性测试。
 - 日线时间、数据区间、复权参考日期、缓存命中/刷新状态应可追溯。
 
